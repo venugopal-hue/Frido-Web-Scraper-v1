@@ -1,6 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const DB_PATH = process.env.DB_PATH
   ? resolve(process.env.DB_PATH)
@@ -102,6 +103,49 @@ CREATE TABLE IF NOT EXISTS watches (
   PRIMARY KEY (chat_id, product_url)
 );
 `);
+
+// Auto-seed baseline dataset when database is empty (e.g. newly deployed on Render)
+function autoSeed() {
+  try {
+    const rowCount = db.prepare('SELECT COUNT(*) AS n FROM products').get()?.n ?? 0;
+    if (rowCount > 0) return;
+
+    const seedPath = resolve(dirname(fileURLToPath(import.meta.url)), 'seed-data.json');
+    if (!existsSync(seedPath)) return;
+
+    const seed = JSON.parse(readFileSync(seedPath, 'utf8'));
+    db.exec('BEGIN');
+
+    if (seed.categories?.length) {
+      const stmt = db.prepare(`INSERT OR IGNORE INTO categories (slug, name, collection_url, image_url, updated_at) VALUES (?, ?, ?, ?, ?)`);
+      for (const c of seed.categories) stmt.run(c.slug, c.name, c.collection_url, c.image_url, c.updated_at);
+    }
+    if (seed.runs?.length) {
+      const stmt = db.prepare(`INSERT OR IGNORE INTO runs (id, collector_id, target_url, status, item_count, error, started_at, finished_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
+      for (const r of seed.runs) stmt.run(r.id, r.collector_id, r.target_url, r.status, r.item_count, r.error, r.started_at, r.finished_at);
+    }
+    if (seed.products?.length) {
+      const stmt = db.prepare(`INSERT OR IGNORE INTO products (id, run_id, category, product_name, current_price, original_price, discount_percent, availability, rating, review_count, product_url, image_url, scraped_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+      for (const p of seed.products) stmt.run(p.id, p.run_id, p.category, p.product_name, p.current_price, p.original_price, p.discount_percent, p.availability, p.rating, p.review_count, p.product_url, p.image_url, p.scraped_at);
+    }
+    if (seed.heal_events?.length) {
+      const stmt = db.prepare(`INSERT OR IGNORE INTO heal_events (id, collector_id, trigger, prompt, status, detail, items_before, items_after, coverage_before, coverage_after, created_at, resolved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+      for (const h of seed.heal_events) stmt.run(h.id, h.collector_id, h.trigger, h.prompt, h.status, h.detail, h.items_before, h.items_after, h.coverage_before, h.coverage_after, h.created_at, h.resolved_at);
+    }
+    if (seed.packs?.length) {
+      const stmt = db.prepare(`INSERT OR IGNORE INTO packs (product_url, pack_label, unit_count, price_per_unit, total_price, updated_at) VALUES (?, ?, ?, ?, ?, ?)`);
+      for (const pk of seed.packs) stmt.run(pk.product_url, pk.pack_label, pk.unit_count, pk.price_per_unit, pk.total_price, pk.updated_at);
+    }
+
+    db.exec('COMMIT');
+    console.log(`[db] auto-seeded baseline data: ${seed.products?.length || 0} products, ${seed.categories?.length || 0} categories, ${seed.runs?.length || 0} runs`);
+  } catch (err) {
+    db.exec('ROLLBACK');
+    console.error('[db] auto-seed error:', err);
+  }
+}
+
+autoSeed();
 
 export const nowIso = () => new Date().toISOString();
 
