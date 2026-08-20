@@ -45,13 +45,12 @@ export default function Page() {
     load();
   }, [load]);
 
-  // While a scrape or heal is in flight the status changes server-side, so
-  // poll until it settles rather than waiting on the long-running request.
+  // Continuously refresh in realtime (fast polling during scrapes, steady polling when idle)
   useEffect(() => {
-    if (!status) return;
-    const busy = status.scraping || status.health === 'healing' || status.health === 'running';
-    if (!busy) return;
-    const t = setInterval(load, 4000);
+    const busy = Boolean(
+      status?.scraping || status?.health === 'healing' || status?.health === 'running'
+    );
+    const t = setInterval(load, busy ? 3000 : 12000);
     return () => clearInterval(t);
   }, [status, load]);
 

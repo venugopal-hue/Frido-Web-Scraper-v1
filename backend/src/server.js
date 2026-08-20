@@ -34,6 +34,14 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Prevent Vercel edge/proxies from caching dynamic API responses
+app.use('/api', (_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  next();
+});
+
 const PORT = process.env.PORT ?? 4000;
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN ?? '';
 

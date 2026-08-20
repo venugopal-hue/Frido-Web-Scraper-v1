@@ -146,6 +146,9 @@ export function normalizeProduct(raw, fallbackCategory = null) {
   // scraper only fills `category` sporadically, so derive it as a fallback.
   const sourceUrl = str(raw?.input?.url);
 
+  let img = str(pick('image_url', 'image', 'thumbnail', 'img'));
+  if (img && img.startsWith('//')) img = `https:${img}`;
+
   return {
     product_name: name,
     current_price: num(pick('current_price', 'price', 'sale_price', 'selling_price')),
@@ -155,7 +158,7 @@ export function normalizeProduct(raw, fallbackCategory = null) {
     rating: num(pick('rating', 'star_rating', 'average_rating')),
     review_count: num(pick('review_count', 'reviews', 'ratings_count', 'num_reviews')),
     product_url: url,
-    image_url: str(pick('image_url', 'image', 'thumbnail', 'img')),
+    image_url: img,
     category:
       categoryFromUrl(sourceUrl) ??
       str(pick('category', 'collection', 'collection_name')) ??
@@ -187,18 +190,37 @@ export async function runScraper({ collectorId = COLLECTOR_ID, url, urls, timeou
 }
 
 /**
- * Fetch a product's Shopify JSON (`/products/{handle}.json`) via Web Unlocker.
+ * Fetch a product's Shopify JSON (`/products/{handle}.json`).
  *
- * The collection-grid scraper misses `image_url` on most rows because the grid
- * lazy-loads its images. This endpoint returns them directly, so it is used to
- * backfill rather than relying on a heal that cannot see un-scrolled content.
+ * Tries direct high-speed HTTP request first (takes ~50ms), and falls back
+ * to Web Unlocker via `bdata scrape` if direct fetch fails.
  */
 export async function fetchProductJson(productUrl) {
   if (!productUrl) return null;
 
   const url = `${productUrl.split('?')[0].replace(/\/$/, '')}.json`;
+
+  // 1. Fast direct fetch
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        Accept: 'application/json',
+      },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.product) return data.product;
+    }
+  } catch {
+    // Fall back to CLI unlocker below
+  }
+
+  // 2. Fallback to CLI unlocker
   const { code, stdout } = await exec(['scrape', url, '--format', 'json'], {
-    timeoutMs: 90_000,
+    timeoutMs: 30_000,
   });
   if (code !== 0) return null;
 
