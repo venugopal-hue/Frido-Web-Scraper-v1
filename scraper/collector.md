@@ -67,6 +67,41 @@ bdata scraper run c_mt11rkfr1irkjzsb9 \
 Batching is what the backend uses; a single call across 2 collections returned
 49 rows.
 
+## Pack-pricing scraper
+
+| | |
+|---|---|
+| **Collector ID** | `c_mt15pipw2hu94v7ehy` |
+| **Name** | `frido-pack-pricing` |
+| **Console** | https://brightdata.com/cp/scrapers/c_mt15pipw2hu94v7ehy |
+| **Target** | `https://store.myfrido.com/products/*` |
+
+Collection pages show only the single-unit price. Product pages carry a
+multi-pack buy-box that is often a better deal than the headline discount:
+
+```
+Frido Ultimate Cozy Pillow
+  1 Pillow  → ₹699/unit
+  2 Pillows → ₹599.50/unit  (total ₹1,199)
+  4 Pillows → ₹574.80/unit  (total ₹2,299)   ← 18% cheaper per unit
+```
+
+Created with:
+
+```bash
+bdata scraper create "https://store.myfrido.com/products/frido-ultimate-cozy-pillow" \
+  "Extract the multi-pack pricing options from the product page buy-box. For each pack \
+   option shown, extract: pack_label, unit_count, price_per_unit, total_price. Also \
+   extract product_name and the headline discount_percent." \
+  --name frido-pack-pricing
+```
+
+Note the output nests options in a `pack_options` array rather than returning
+one row per pack, and products without a pack selector return an empty array —
+[`scrape-packs.js`](../backend/src/jobs/scrape-packs.js) stores only rows with
+more than one option, since a lone "1 Pillow" entry says nothing the collection
+page did not.
+
 ## Output schema
 
 One row per product. Field names below are what the backend stores after

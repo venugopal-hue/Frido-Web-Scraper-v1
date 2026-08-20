@@ -7,7 +7,7 @@ D2C ergonomics brand, built on a **Bright Data Scraper Studio** collector and a
 pipeline that detects its own breakage and calls `bdata scraper heal` — driven
 from plain-English descriptions of what looks wrong, not from selectors.
 
-Two surfaces read the same API: a glassmorphism dashboard and a Telegram bot.
+Two surfaces read the same API: a minimal web dashboard and a Telegram bot.
 
 > **On the heals:** three real heals were generated and approved against this
 > collector. None of them changed the scraper's output. That is documented
@@ -49,14 +49,19 @@ That is the case for a self-healing scraper.
 ## What it does
 
 - **Tracks** name, price, MRP, discount, availability, URL and image across
-  Frido's collections
-- **Detects its own breakage** — a run returning zero rows is treated as a
-  broken scraper, not an empty catalogue
+  Frido's whole catalogue — 146 products, 31 collections
+- **Detects its own degradation** — not just zero rows, but coverage
+  regressions, row-count collapse and prices that stop parsing
 - **Heals itself** by calling `bdata scraper heal` with a description of the
-  symptom, then re-running and recording the outcome
+  symptom, then re-running and recording the before/after field coverage
+- **Finds pack pricing the storefront hides** — a mask listed at ₹349 costs
+  ₹174.80 per unit in a four-pack, a better deal than the headline discount
+- **Scores prices against their own history** — "is this actually cheap?"
+  rather than "what is the MRP discount?"
 - **Diffs** each run against the previous snapshot: price drops, restocks,
   sold-outs, new products
-- **Alerts** subscribed Telegram chats when something meaningful changes
+- **Alerts** Telegram — catalogue-wide for subscribers, per-product for
+  watchers
 
 ---
 
@@ -183,8 +188,19 @@ npm start                 # → http://localhost:4000
 First data:
 
 ```bash
-npm run scrape            # real bdata scraper run, auto-heals on empty output
+npm run scrape            # real bdata scraper run, auto-heals on degradation
 ```
+
+Other jobs:
+
+| Command | What it does |
+|---|---|
+| `npm run scrape` | Full catalogue: chunked runs, dedupe, image backfill, anomaly check |
+| `npm run scrape-packs` | Multi-pack pricing from product pages (second collector) |
+| `npm run refresh-images` | Re-point every product at the store's own first image |
+| `npm run seed-categories` | Rediscover collections from the category index |
+| `npm run demo-break` | Simulated break → auto-heal fires, for the demo video |
+| `npm run import-heals` | Load CLI-run heal artifacts into the timeline |
 
 ### 3. Dashboard
 
@@ -232,14 +248,19 @@ Write endpoints honour `ADMIN_TOKEN` via the `x-admin-token` header when set.
 
 | Command | Behaviour |
 |---|---|
-| `/latest` | Current prices, biggest discounts first |
-| `/deals` | Everything at 50%+ off |
+| `/deals` | Discount bands as tappable buttons — `Under 25%`, `25–39%`, `40–49%`, `50–69%`, `70%+`, with counts |
+| `/latest` | Top 20 of the catalogue, discounts first |
 | `/categories` | Item counts and entry prices per category |
-| `/subscribe` · `/unsubscribe` | Price-drop and restock alerts |
+| `/watch <name>` | Follow one product; disambiguates when a name is ambiguous |
+| `/watchlist` · `/unwatch <name>` | Manage what you follow |
+| `/subscribe` · `/unsubscribe` | Catalogue-wide price and stock alerts |
 | `/status` | Scraper health, last run, last heal |
 | `/heal <what broke>` | Admin — real `bdata scraper heal` from chat |
 | `/approve` | Admin — approve a heal awaiting sign-off |
 | `/refresh` | Admin — trigger a scrape |
+
+Bands are **exclusive**: `50–69%` does not include the 70%+ items. Long lists
+paginate inside one message, edited in place, so the keyboard stays attached.
 
 Run `npm run preview` in `telegram-bot/` to render every message against the
 live API without needing a token.

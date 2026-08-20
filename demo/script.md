@@ -57,13 +57,15 @@ bdata scraper run c_mt11rkfr1irkjzsb9 \
 
 ### 3 · The dashboard (0:50–1:20) — *Presentation / UI*
 
-`localhost:3000`. Let the aurora drift for a beat before interacting.
+`localhost:3000`. Clean light UI — the product photos are the colour on the
+page, which is the point: they are shown exactly as the store serves them.
 
-- Status bar: **Healthy**, Collector ID, 49 items
-- Stats: 51% average discount, ₹1,13,073 total MRP savings, 14 sold out
-- Filter to **Pillows**, sort by **Biggest discount**
-- Hover a card to show the glass lift
-- Click a card → price history modal
+- Status bar: **Healthy**, Collector ID, 146 products
+- Stats row: products, average discount, total MRP savings, out of stock
+- Tap the **Pillows** chip, then sort by **Biggest discount**
+- Point out a **📦 pack price** card — "the tile says ₹349, but four of them
+  cost ₹174.80 each. The store never shows you that in a list view."
+- Click a card → price history modal, with lowest/highest seen
 
 ### 4 · Self-healing — the centrepiece (1:20–2:20) — *Reliability*
 

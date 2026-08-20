@@ -11,7 +11,9 @@
     "scrape": "node src/jobs/scrape-once.js",
     "seed-categories": "node src/jobs/scrape-categories.js",
     "refresh-images": "node src/jobs/refresh-images.js",
-    "scrape-packs": "node src/jobs/scrape-packs.js"
+    "scrape-packs": "node src/jobs/scrape-packs.js",
+    "demo-break": "node src/jobs/demo-break.js",
+    "import-heals": "node src/jobs/import-heals.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

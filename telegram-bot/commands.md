@@ -4,9 +4,12 @@ Paste the block below into [@BotFather](https://t.me/BotFather) via
 `/setcommands` so the commands autocomplete in chat.
 
 ```
+deals - Filter products by discount range
 latest - Current prices, biggest discounts first
-deals - Everything at 50% off or more
 categories - Item counts and entry prices per category
+watch - Follow one product for price alerts
+watchlist - Products you are following
+unwatch - Stop following a product
 subscribe - Get alerts on price drops and restocks
 unsubscribe - Stop alerts
 status - Scraper health and last heal event
@@ -20,12 +23,40 @@ should not autocomplete for the public.
 | Command | Reads | Behaviour |
 |---|---|---|
 | `/start` | — | Welcome + what the bot tracks |
-| `/latest` | `GET /api/data` | Top 10 by discount, with prices and stock state |
-| `/deals` | `GET /api/data` | Only items at 50%+ off, with MRP struck through |
+| `/latest` | `GET /api/data` | Top 20 by discount, header states the cap |
+| `/deals` | `GET /api/data` | Discount bands as inline buttons; see below |
+| `/watch <name>` | `POST /api/watches` | Follows one product; offers buttons when ambiguous |
+| `/watchlist` | `GET /api/watches/:chatId` | Current prices for everything followed |
+| `/unwatch <name>` | `DELETE /api/watches/:chatId` | Stops following |
 | `/categories` | `GET /api/data` | Per-category item count and entry price |
 | `/subscribe` | `POST /api/subscribers` | Adds this chat to the alert list |
 | `/unsubscribe` | `DELETE /api/subscribers/:id` | Removes it |
 | `/status` | `GET /api/status` | Health, collector ID, last run, last heal |
+
+## Discount bands
+
+`/deals` renders an inline keyboard. Bands are **exclusive** — `50–69%` does
+not include the 70%+ items:
+
+| Band | Products |
+|---|---|
+| All | 146 |
+| Under 25% | 21 |
+| 25–39% | 39 |
+| 40–49% | 24 |
+| 50–69% | 52 |
+| 70%+ | 10 |
+
+They sum to exactly 146, so nothing is lost between bands or double-counted.
+
+Tapping a band edits the existing message rather than sending a new one, and
+page arrows appear when a band needs more than one page. `/deals 65` jumps
+straight to the band containing 65.
+
+The earlier version sliced to the top 10 after sorting by discount, which meant
+the ten 70%+ items filled the whole list and the 52 products between 50% and
+69% were never shown — the stated threshold looked wrong when it was the slice
+at fault.
 
 ## Admin commands
 
