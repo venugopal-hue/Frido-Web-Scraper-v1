@@ -1,0 +1,96 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Minimal light theme.
+ *
+ * Product photography from Shopify is shot for white backgrounds, so a light
+ * surface shows each image exactly as the store does — no tinting, no dark
+ * halo around transparent PNGs.
+ */
+:root {
+  --bg: #fbfbfd;
+  --surface: #ffffff;
+  --border: #e7e7ec;
+  --border-strong: #d6d6de;
+  --text: #16161a;
+  --text-muted: #6b6b76;
+  --text-faint: #9a9aa4;
+  --accent: #4f46e5;
+  --radius: 12px;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: 'tnum' on; /* aligned figures in price columns */
+}
+
+@layer components {
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+
+  /* Hover is a border darkening rather than a lift — quieter, and it does not
+     shift layout or cast shadows across neighbouring cards. */
+  .card--interactive {
+    transition:
+      border-color 0.15s ease,
+      box-shadow 0.15s ease;
+  }
+  .card--interactive:hover {
+    border-color: var(--border-strong);
+    box-shadow: 0 1px 3px rgba(20, 20, 40, 0.06);
+  }
+
+  .skeleton {
+    position: relative;
+    overflow: hidden;
+    background: #f1f1f5;
+  }
+  .skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.7), transparent);
+    animation: shimmer 1.5s infinite;
+  }
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: #d3d3db;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

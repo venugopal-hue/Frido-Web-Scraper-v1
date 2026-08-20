@@ -1,0 +1,90 @@
+{
+  "run": {
+    "id": 2,
+    "collector_id": "c_mt11rkfr1irkjzsb9",
+    "target_url": "https://store.myfrido.com/collections/tt-orthotics,https://store.myfrido.com/collections/footwears,https://store.myfrido.com/collections/tt-chairs-all-products,https://store.myfrido.com/collections/mattress-topper-and-protectors",
+    "status": "success",
+    "item_count": 29,
+    "error": null,
+    "started_at": "2026-08-20T05:11:24.443Z",
+    "finished_at": "2026-08-20T05:14:27.390Z"
+  },
+  "count": 29,
+  "products": [
+    {
+      "id": 71,
+      "run_id": 2,
+      "category": "Chairs",
+      "product_name": "Frido 3D Posture Plus Ergonomic Chair",
+      "current_price": 17499,
+      "original_price": 30000,
+      "discount_percent": 42,
+      "availability": "in stock",
+      "rating": null,
+      "review_count": null,
+      "product_url": "https://store.myfrido.com/products/frido-3d-posture-plus-ergonomic-chair",
+      "image_url": "https://cdn.shopify.com/s/files/1/0553/0419/2034/files/3D-PPEC_LI_Tan_01_eb40b66b-5b2a-4a6f-8dc5-73252fdd3c8a.jpg?v=1747466614",
+      "scraped_at": "2026-08-20T05:14:27.387Z"
+    },
+    {
+      "id": 72,
+      "run_id": 2,
+      "category": "Chairs",
+      "product_name": "Frido AeroMesh Classic Ergo Chair - With Headrest",
+      "current_price": 12999,
+      "original_price": 16000,
+      "discount_percent": 19,
+      "availability": "in stock",
+      "rating": null,
+      "review_count": null,
+      "product_url": "https://store.myfrido.com/products/frido-aeromesh-classic-ergo-chair",
+      "image_url": "https://cdn.shopify.com/s/files/1/0553/0419/2034/files/AC-01_63283373-264a-40a7-a39d-9a192d55e645.jpg?v=1758204983",
+      "scraped_at": "2026-08-20T05:14:27.387Z"
+    },
+    {
+      "id": 67,
+      "run_id": 2,
+      "category": "Chairs",
+      "product_name": "Frido AeroMesh Classic Ergo Chair - Without Headrest",
+      "current_price": 10999,
+      "original_price": 15000,
+      "discount_percent": 27,
+      "availability": "in stock",
+      "rating": null,
+      "review_count": null,
+      "product_url": "https://store.myfrido.com/products/frido-aeromesh-classic-ergo-chair-without-headrest",
+      "image_url": "https://cdn.shopify.com/s/files/1/0553/0419/2034/files/grey_AC-01_e5e0ff43-703b-4342-ae59-89607e3e6eb5.jpg?v=1759499767",
+      "scraped_at": "2026-08-20T05:14:27.387Z"
+    },
+    {
+      "id": 66,
+      "run_id": 2,
+      "category": "Chairs",
+      "product_name": "Frido AeroMesh Ergo Chair",
+      "current_price": 16999,
+      "original_price": 25000,
+      "discount_percent": 32,
+      "availability": "in stock",
+      "rating": null,
+      "review_count": null,
+      "product_url": "https://store.myfrido.com/products/frido-aeromesh-ergo-chair",
+      "image_url": "https://cdn.shopify.com/s/files/1/0553/0419/2034/files/2-AMEC-G_111d97af-10bd-40d3-a443-88f3c28c6b6a.jpg?v=1780044865",
+      "scraped_at": "2026-08-20T05:14:27.387Z"
+    },
+    {
+      "id": 68,
+      "run_id": 2,
+      "category": "Chairs",
+      "product_name": "Frido Aeroluxe Massage Chair",
+      "current_price": 29990,
+      "original_price": 35999,
+      "discount_percent": 17,
+      "availability": "out of stock",
+      "rating": null,
+      "review_count": null,
+      "product_url": "https://store.myfrido.com/products/frido-aeroluxe-massage-chair",
+      "image_url": "https://cdn.shopify.com/s/files/1/0553/0419/2034/files/01C-ALC.jpg?v=1746604325",
+      "scraped_at": "2026-08-20T05:14:27.387Z"
+    }
+  ]
+}

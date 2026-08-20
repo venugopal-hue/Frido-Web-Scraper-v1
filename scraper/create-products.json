@@ -1,0 +1,1 @@
+{"collector_id":"c_mt11rkfr1irkjzsb9","name":"frido-products","status":"done","completed_steps":["prepare_intent_analyzer","planner","discovery","collector_mainatiner","output_schema_generator","code_generator","input_schema_generator","preview_runner","preview_picker"],"view_url":"https://brightdata.com/cp/scrapers/c_mt11rkfr1irkjzsb9","created_at":"2026-08-20T04:55:29.847Z"}
