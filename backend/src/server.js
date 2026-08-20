@@ -181,15 +181,24 @@ app.post('/api/heal', requireAdmin, async (req, res) => {
 });
 
 app.post('/api/heal/approve', requireAdmin, async (req, res) => {
-  const result = await approveHeal({ reject: Boolean(req.body?.reject) });
+  const reject = Boolean(req.body?.reject);
+  const result = await approveHeal({ reject });
   const pending = activeHeal();
+
   if (pending) {
     updateHeal(pending.id, {
-      status: req.body?.reject ? 'failed' : 'healed',
-      detail: result.output || result.stderr,
+      // Approving is not the same as saving: only a completed
+      // save_new_template step means the collector actually changed.
+      status: reject ? 'failed' : result.saved ? 'healed' : 'failed',
+      detail: reject
+        ? 'Heal rejected'
+        : result.saved
+          ? `Approved and saved. Steps: ${result.steps.join(' → ')}`
+          : 'Approved but NOT saved — the collector still runs the old code',
     });
   }
-  res.json(result);
+
+  res.json({ ...result, saved: result.saved });
 });
 
 /* ---------------- subscribers (used by the Telegram bot) ---------------- */

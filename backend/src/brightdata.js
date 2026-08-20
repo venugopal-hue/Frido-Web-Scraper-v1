@@ -216,16 +216,35 @@ export async function fetchProductJson(productUrl) {
   return body?.product ?? null;
 }
 
-/** `bdata scraper heal` — the self-healing call. */
-export async function healScraper({ collectorId = COLLECTOR_ID, prompt, timeoutMs }) {
+/**
+ * `bdata scraper heal` — the self-healing call.
+ *
+ * `--auto-save` is essential and easy to miss. Approving a heal is a separate
+ * operation from *saving* the healed template: without it the job reports
+ * `status: "done"` and `bdata scraper run` keeps executing the old code. The
+ * completed_steps list is the tell — a heal that actually landed ends with
+ * `save_new_template`, one that did not ends at `user_approval`.
+ *
+ * @param {boolean} autoApprove  Skip the human-in-the-loop gate. The scheduler
+ *   leaves this false so an unattended run cannot rewrite the scraper without
+ *   review; the manual endpoint can opt in.
+ */
+export async function healScraper({
+  collectorId = COLLECTOR_ID,
+  prompt,
+  autoApprove = false,
+  timeoutMs,
+}) {
   if (!collectorId) throw new Error('COLLECTOR_ID is not set — see .env.example');
 
-  const { code, stdout, stderr } = await exec(
-    ['scraper', 'heal', collectorId, prompt, '--json'],
-    timeoutMs ? { timeoutMs } : {}
-  );
+  const args = ['scraper', 'heal', collectorId, prompt];
+  if (autoApprove) args.push('--auto-approve', '--auto-save');
+  args.push('--json');
+
+  const { code, stdout, stderr } = await exec(args, timeoutMs ? { timeoutMs } : {});
   const payload = extractJson(stdout);
   const status = str(payload?.status) ?? (code === 0 ? 'healed' : 'failed');
+  const steps = payload?.completed_steps ?? [];
 
   return {
     ok: code === 0,
@@ -233,16 +252,38 @@ export async function healScraper({ collectorId = COLLECTOR_ID, prompt, timeoutM
     status,
     // Heals can come back pending a human approval; the caller surfaces this.
     awaitingApproval: /await|pending|approval/i.test(status),
+    // The only reliable signal that the fix actually reached the collector.
+    saved: steps.includes('save_new_template'),
+    steps,
     raw: payload,
     output: stdout.trim(),
     stderr: stderr.trim(),
   };
 }
 
-/** `bdata scraper approve` — confirm a heal that is awaiting approval. */
-export async function approveHeal({ collectorId = COLLECTOR_ID, reject = false }) {
-  const args = ['scraper', 'approve', collectorId, '--json'];
+/**
+ * `bdata scraper approve` — confirm a heal that is awaiting approval.
+ *
+ * `--auto-save` is passed by default deliberately. Approving without it leaves
+ * the healed template unsaved, so the run afterwards silently uses the old
+ * code while every status field still reads "done".
+ */
+export async function approveHeal({ collectorId = COLLECTOR_ID, reject = false, save = true }) {
+  const args = ['scraper', 'approve', collectorId];
   if (reject) args.push('--reject');
-  const { code, stdout, stderr } = await exec(args);
-  return { ok: code === 0, raw: extractJson(stdout), output: stdout.trim(), stderr: stderr.trim() };
+  else if (save) args.push('--auto-save');
+  args.push('--json');
+
+  const { code, stdout, stderr } = await exec(args, { timeoutMs: 10 * 60 * 1000 });
+  const payload = extractJson(stdout);
+  const steps = payload?.completed_steps ?? [];
+
+  return {
+    ok: code === 0,
+    saved: steps.includes('save_new_template'),
+    steps,
+    raw: payload,
+    output: stdout.trim(),
+    stderr: stderr.trim(),
+  };
 }

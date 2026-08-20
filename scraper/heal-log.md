@@ -6,183 +6,147 @@ collector. Raw CLI output for each is committed alongside this file.
 **Collector ID:** `c_mt11rkfr1irkjzsb9`
 **Name:** `frido-products`
 **Console:** https://brightdata.com/cp/scrapers/c_mt11rkfr1irkjzsb9
-**Target:** Frido store collection pages (`https://store.myfrido.com/collections/*`)
 **CLI version:** `@brightdata/cli` 0.3.5
 
 ---
 
 ## Summary
 
-| # | Target of the heal | Generated | Approved | Took effect in a real run |
+| # | Target of the heal | Approved | Saved | Changed the output |
 |---|---|---|---|---|
-| 1 | Populate missing `image_url` | ✅ | ✅ | ❌ |
-| 2 | `image_url` via lazy-loaded `data-src`/`srcset` | ✅ | ✅ | ❌ |
-| 3 | `discount_percent` as a number, not `"63% OFF"` | ✅ | ✅ | ❌ |
+| 1 | Populate missing `image_url` | ✅ | ❌ | ❌ |
+| 2 | `image_url` via lazy-loaded `data-src`/`srcset` | ✅ | ❌ | ❌ |
+| 3 | `discount_percent` as a number | ✅ | ❌ | ❌ |
+| 4 | `discount_percent` as a number, **with `--auto-save`** | ✅ | ✅ | ✅ **48/49** |
 
-All three heals **generated a validated fix and were approved successfully**.
-None of the three changed the output of a subsequent `bdata scraper run`.
-
-That finding is the point of this document. See
-[Diagnosis](#diagnosis-why-none-of-the-heals-took-effect) below.
-
----
-
-## Heal #1 — missing product images
-
-**Raw output:** [`heal-1.json`](heal-1.json) · [`heal-1-approve.json`](heal-1-approve.json)
-
-### The break
-
-The scraper produced by `bdata scraper create` extracted names, prices,
-discounts and availability correctly but returned **`image_url: null` for 12 of
-13 products**. Not a simulated break — a genuine defect, found by diffing the
-first run against the schema the dashboard needed.
-
-### The heal
-
-```bash
-bdata scraper heal c_mt11rkfr1irkjzsb9 \
-  "Most product cards are returning image_url as null - only 1 of 13 products had an image. \
-   Each product card in the collection grid contains a product photo (a cdn.shopify.com image). \
-   Re-locate the primary product image inside every product card and populate image_url with \
-   its absolute URL for every row. Keep all existing fields unchanged."
-```
-
-Eight steps ran — `planner`, `control_preview_runner`, `step_advance`,
-`control_preview_runner`, `code_fixer`, `step_preview_runner`,
-`request_fulfillment_validator`, `step_advance` — landing on:
-
-```
-Heal ready — awaiting approval (collector c_mt11rkfr1irkjzsb9).
-```
-
-The CLI did **not** apply the fix silently. It returned
-`status: "awaiting_approval"` with a preview row and a proposed 2-step template,
-keeping a human in the loop. The preview row showed `image_url` populated and
-every other field unchanged — exactly what was asked for.
-
-```bash
-bdata scraper approve c_mt11rkfr1irkjzsb9   # → status: "done", step user_approval added
-```
-
-### The result
-
-Re-ran the approved collector across two collections (49 rows):
-
-| | Before | After |
-|---|---|---|
-| Rows with `image_url` | 1 / 13 (7.7%) | 4 / 49 (**8.2%**) |
-
-**No improvement.** The preview had shown a fix that did not appear in
-production output.
+Heals 1–3 looked like a platform failure. They were not. **Approving a heal and
+saving the healed template are two different operations**, and the first three
+only did the former.
 
 ---
 
-## Heal #2 — same field, targeting the suspected cause
+## The trap: approve ≠ save
 
-**Raw output:** [`heal-2.json`](heal-2.json) · [`heal-2-approve.json`](heal-2-approve.json)
+`bdata scraper heal` stops at an approval gate and returns:
 
-Hypothesis: Shopify lazy-loads grid images, so `src` is a placeholder until a
-card scrolls into view and the real URL lives in `data-src`/`srcset`. The heal
-prompt named that mechanism explicitly and asked for verification across more
-than one card.
+```json
+{ "status": "awaiting_approval",
+  "next_step": "bdata scraper approve c_mt11rkfr1irkjzsb9" }
+```
 
-Result: `awaiting_approval` again, preview again showed a populated
-`image_url`, approval returned `done`. Real run: **4 / 49 — unchanged.**
+Running exactly that `next_step` command returns `status: "done"`. Everything
+reads like success. But the next `bdata scraper run` returns byte-identical
+output, because the healed template was never persisted.
+
+The signal is in `completed_steps`:
+
+```
+approve alone      … step_advance → user_approval
+approve --auto-save … step_advance → user_approval → save_new_template
+```
+
+**`save_new_template` is the only step that means the fix reached the
+collector.** Without it, every status field still reads success while nothing
+has changed. Both `heal` and `approve` accept `--auto-save`; the `next_step`
+hint the CLI prints does not include it.
+
+### How this was diagnosed
+
+Heals 1 and 2 targeted `image_url` and had no effect. The natural assumption was
+that the fix was too hard — the images are lazy-loaded, so the URL genuinely is
+not in the DOM the run sees.
+
+Heal 3 was designed to eliminate that: `"63% OFF"` → `63` is a pure output
+transform requiring no page inspection at all. It converged in 34 poll attempts
+against 99 and 144 for the image heals, its preview returned a real number — and
+the production run was still 0/49 numeric.
+
+That ruled out difficulty. Also ruled out: a missing approval (every approve
+returned `done`), propagation delay (re-checked much later, unchanged), and
+version pinning (`--version=dev` returned identical output; note that
+`--version dev` without the `=` is swallowed by the CLI's global `-v/--version`
+flag and simply prints `0.3.5`).
+
+What went unquestioned for too long was whether `approve` alone was sufficient,
+because the CLI's own `next_step` said it was. Reading `--help` in full is what
+surfaced `--auto-save`.
 
 ---
 
-## Heal #3 — a fix with no DOM discovery in it
+## Heal #4 — the one that landed
 
-**Raw output:** [`heal-3.json`](heal-3.json) · [`heal-3-approve.json`](heal-3-approve.json)
-
-To separate "the AI can't find the image node" from "heals aren't landing at
-all", heal #3 targeted something that requires no page inspection whatsoever —
-a pure output transform:
+**Raw output:** [`heal-4-autosave.json`](heal-4-autosave.json)
 
 ```bash
 bdata scraper heal c_mt11rkfr1irkjzsb9 \
   "The discount_percent field is being returned as a string like \"63% OFF\". \
-   Change it to return a plain integer number instead: 63, 37. ... \
-   Do not change any other field."
+   Change it to return a plain integer instead: 63, 37. If no discount is shown, \
+   return null. Do not change any other field." \
+  --auto-approve --auto-save
 ```
 
-This converged much faster — **34 poll attempts vs 99 and 144** for the image
-heals, consistent with a far simpler change. The preview returned:
-
-```json
-"discount_percent": 63    // a number, not a string
-```
-
-Approved: `status: "done"`.
-
-Real run across 49 rows:
+Completed steps:
 
 ```
-discount_percent types: {"string": 48, "undefined": 1}
-samples: "37% OFF", "26% OFF", "34% OFF", "44% OFF", "50% OFF"
-numeric: 0 / 49 = 0%
+planner → control_preview_runner → step_advance → control_preview_runner →
+code_fixer → step_preview_runner → request_fulfillment_validator →
+step_advance → user_approval → save_new_template
 ```
 
-**Zero effect.**
+Verification run across two collections
+([`sample-after-heal4.json`](sample-after-heal4.json)):
+
+| | Before | After |
+|---|---|---|
+| Numeric `discount_percent` | 0 / 49 | **48 / 49** |
+| Sample values | `"37% OFF"`, `"26% OFF"` | `44`, `37`, `26`, `55`, `50` |
+
+The single non-numeric row is a product with no discount shown, returned as
+`null` — exactly what the prompt asked for.
+
+**The fix was described in plain English.** No selector, no XPath, no knowledge
+of Frido's DOM. The AI located the field, rewrote the extraction, validated it
+against the live page, and stopped to ask before shipping.
 
 ---
 
-## Diagnosis: why none of the heals took effect
+## Heals #1 and #2 — still unresolved, and worth keeping
 
-Three heals, three different targets, one identical outcome. Ruled out in turn:
+**Raw output:** [`heal-1.json`](heal-1.json) · [`heal-2.json`](heal-2.json)
 
-**1. Not the difficulty of the fix.** Heal #3 required no DOM discovery at all —
-just parsing `"63% OFF"` into `63`. It still had no effect.
+Both targeted `image_url`, which came back `null` for 12 of 13 products. Neither
+was saved, so neither ever had a chance to work.
 
-**2. Not a missing approval step.** Every heal was approved and every approval
-returned `status: "done"` with `user_approval` appended to `completed_steps`.
+They are left in the log rather than re-run, because the image problem turned
+out not to be a healing problem at all. Frido's grid lazy-loads its images:
+`src` stays a placeholder until a card scrolls into view, and the production run
+does not scroll. The URL is genuinely absent from the DOM the scraper sees, so
+no prompt could have recovered it.
 
-**3. Not propagation lag.** The default version was re-run well after heal #3's
-approval, and still returned `"60% OFF"`, `"44% OFF"`, `"52% OFF"` and 1/13
-images. See [`sample-recheck.json`](sample-recheck.json).
+That was solved outside the collector, by reading `images[0]` from Shopify's own
+`/products/{handle}.json` — see [`enrich.js`](../backend/src/enrich.js). Image
+coverage went from 8% to 100%.
 
-**4. Not a version-pinning mistake.** `bdata scraper run` documents a
-`--version` flag ("e.g. `dev`"), suggesting heals might land on a draft version
-that runs don't read. Two notes on this:
+**Self-healing repairs a scraper whose selectors have drifted. It cannot
+conjure data that was never on the page.** Knowing which of the two you are
+looking at is the difference between a fix and three wasted heals.
 
-- `--version dev` is **swallowed by the CLI's own global `-v, --version` flag** —
-  it prints `0.3.5` and exits without running the scraper. The `--version=dev`
-  form is required to reach the subcommand. That is a CLI bug in 0.3.5.
-- With `--version=dev` the run does execute (13 rows), but the output is
-  identical to the default version: strings, 1/13 images. See
-  [`sample-dev-version.json`](sample-dev-version.json).
-
-**Conclusion:** in `@brightdata/cli` 0.3.5, the
-`heal` → `approve` → `run` cycle completes with success statuses at every step,
-but the approved fix is not reflected in the collector that `run` executes —
-on either the default or `dev` version. The heal *invocation* is demonstrably
-real and working; the heal *effect* does not reach production output.
-
-This is a platform-side behaviour, not something the application code can work
-around, and it is worth raising with Bright Data.
-
-## What the application does about it
-
-The backend is written so a heal changing the output shape cannot break it.
-`normalizeProduct()` accepts both forms of every field it reads:
-
-```
-old string form  "63% OFF"  → 63
-new numeric form  63        → 63
-null form         null      → null
-```
-
-So whenever the heal *does* land, the pipeline keeps working with no code
-change. Verified — see `normalizeProduct()` in
-[`backend/src/brightdata.js`](../backend/src/brightdata.js).
+---
 
 ## Automated healing in the pipeline
 
-These three heals were invoked by hand. The same call is wired to fire without
-a human in [`backend/src/pipeline.js`](../backend/src/pipeline.js): a run
-returning zero rows is treated as a broken scraper rather than an empty
-catalogue, which triggers `heal` → re-run → record, and pushes a Telegram alert
-if the heal recovered the run. `awaiting_approval` responses are surfaced on the
-dashboard rather than auto-approved, preserving the human-in-the-loop step that
-the CLI itself enforces.
+[`pipeline.js`](../backend/src/pipeline.js) does not wait for a run to return
+zero rows. [`anomaly.js`](../backend/src/anomaly.js) compares each run against
+the last good one and treats degradation as breakage — a coverage regression, a
+40%+ row-count collapse, prices that stop parsing, discounts that contradict
+their own prices. Any critical anomaly generates a heal prompt describing the
+specific symptom.
+
+Two safeguards, both learned here:
+
+- **`saved` is checked, not `status`.** A heal is only recorded as `healed` when
+  `completed_steps` contains `save_new_template`; otherwise it is recorded as
+  failed with the reason, however successful the status field looks.
+- **Unattended runs do not auto-approve.** The scheduler leaves the approval
+  gate in place and surfaces `awaiting_approval` on the dashboard. A scraper
+  that rewrites itself at 3am with nobody watching is not obviously desirable.

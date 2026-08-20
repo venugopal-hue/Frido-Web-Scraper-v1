@@ -71,74 +71,63 @@ page, which is the point: they are shown exactly as the store serves them.
 
 **This is the most important shot. Do not rush it.**
 
-⚠️ **Read this before recording.** Three heals were run against this collector.
-All three generated a validated fix and were approved. **None changed the
-scraper's output.** Do not script a "watch it fix itself" reveal — there isn't
-one to show. What there *is*, and what is arguably worth more, is a rigorous
-diagnosis. Play that.
-
-Show the real defect:
+Show the defect first — the field coming back as a string:
 
 ```bash
-cat scraper/sample-after-heal2.json | grep -o '"discount_percent":"[^"]*"' | head -3
+cat scraper/sample-after-heal3.json | grep -o '"discount_percent":"[^"]*"' | head -3
 # "discount_percent":"63% OFF"
 ```
 
-> "A string where the dashboard needs a number. I never touched the scraper's
+> "A string where the dashboard needs a number. I never opened the scraper's
 > code — I just described what looked wrong."
 
 ```bash
-bdata scraper heal c_mt11rkfr1irkjzsb9 \
-  "discount_percent is returned as a string like \"63% OFF\". Return a plain
-   integer instead. Do not change any other field."
+bdata scraper heal c_mt11rkfr1irkjzsb9 "discount_percent is returned as a string like '63% OFF'. Return a plain integer instead. If no discount is shown, return null." --auto-approve --auto-save
 ```
 
-Let the step log run. Land on:
+Land on the completed steps, and point at the last one:
 
 ```
-Heal ready — awaiting approval (collector c_mt11rkfr1irkjzsb9).
+… request_fulfillment_validator → step_advance → user_approval → save_new_template
 ```
 
-> "It didn't apply itself. It generated the fix, validated it against the live
-> page, and stopped to ask. That human-in-the-loop step is the right default."
-
-Show the preview returning a real number, then approve:
+Then the verification run:
 
 ```bash
-bdata scraper approve c_mt11rkfr1irkjzsb9   # → status: done
-bdata scraper run c_mt11rkfr1irkjzsb9 ... --pretty
+bdata scraper run c_mt11rkfr1irkjzsb9 --urls "...tt-pillows,...tt-cushions-all-products" --pretty
+# discount_percent: 44, 37, 26, 55, 50
+# NUMERIC: 48 / 49
 ```
 
-**Then the honest turn — the strongest 30 seconds in the video:**
+> "Zero of forty-nine before. Forty-eight of forty-nine after — the one
+> exception is a product with no discount, returned as null, which is what I
+> asked for."
 
-> "And the output is unchanged. Still `"63% OFF"`. Zero of forty-nine rows
-> numeric."
+**Then the part worth more than the success — the trap (30 seconds):**
 
-Open `scraper/heal-log.md` and walk the elimination:
+Open `scraper/heal-log.md`.
 
-> "So I ruled it out properly. Not the difficulty of the fix — this one needed
-> no page inspection at all, just parsing a string, and it converged in 34 polls
-> instead of 144. Not a missing approval — every approve returned `done`. Not
-> propagation lag — I re-ran it much later, same output. Not version pinning —
-> and I found a CLI bug on the way: `run --version dev` is swallowed by the
-> global version flag, it prints 0.3.5 and exits. Using `--version=dev` runs,
-> and returns identical output.
+> "Three earlier heals did nothing, and it took a while to work out why.
+> Approving a heal and *saving* it are two different operations. The CLI hands
+> you a `next_step` field that says run `bdata scraper approve <id>` — you run
+> exactly that, it returns `status: done`, and the fix is never persisted. The
+> next run quietly executes the old code.
 >
-> The heal invocation is real and it works. The heal effect doesn't reach
-> production output in CLI 0.3.5. That's a platform issue, not something my
-> code can route around."
+> The tell is one step in the log. A heal that landed ends with
+> `save_new_template`. One that didn't ends at `user_approval`. Everything else
+> — status, exit code, the preview — looks identical.
+>
+> So the pipeline checks for that step, not the status field."
 
-Then show the mitigation in `backend/src/brightdata.js`:
+Show the guard in `backend/src/brightdata.js`:
 
-> "So the backend is written to not care. `normalizeProduct` accepts the string
-> form and the numeric form of every field. Whenever the heal does land,
-> nothing downstream changes."
+```js
+saved: steps.includes('save_new_template'),
+```
 
-Cut to the dashboard timeline showing all three events with their true statuses.
+> "A heal only counts as healed when the template was actually saved."
 
-> "Two failed, one failed. That's what the timeline says, because that's what
-> happened. A self-healing scraper that only ever succeeds in the demo isn't
-> evidence of anything."
+Cut to the dashboard timeline showing the before/after field coverage per heal.
 
 ### 5 · Telegram (2:20–2:45) — *Creativity / completeness*
 
@@ -172,5 +161,6 @@ Then `.github/workflows/scrape-and-heal.yml`.
 - The `heal` call takes 5–10 minutes: **record it live, then cut the middle of
   the poll log**. Never cut the start or the result.
 - Never show `.env`, the API key, or the bot token
-- Filming the failed image heal alongside the successful one is a feature, not
-  a liability — it is the difference between a demo and evidence
+- Keep the three failed heals in the story. A working heal is table stakes;
+  knowing *why* three of them silently did nothing, and having the pipeline
+  guard against it, is the part that shows you actually ran this thing

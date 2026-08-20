@@ -28,7 +28,7 @@ const HEALS = [
     itemsBefore: 1,
     itemsAfter: 4,
     detail:
-      'Preview showed image_url populated, but a 49-row run still returned 4/49 with images. Fix did not generalise.',
+      'Approved without --auto-save — never persisted. Also the wrong tool: grid images are lazy-loaded, so the URL is absent from the DOM the run sees.',
   },
   {
     file: 'heal-2.json',
@@ -37,14 +37,23 @@ const HEALS = [
     itemsBefore: 4,
     itemsAfter: 4,
     detail:
-      'Targeted lazy-loading (data-src/srcset) explicitly. Preview again showed an image; real run unchanged at 4/49.',
+      'Targeted lazy-loading explicitly. Also approved without --auto-save. Image coverage was ultimately fixed outside the collector via /products/{handle}.json.',
   },
   {
     file: 'heal-3.json',
     trigger: 'manual',
     status: 'failed',
     detail:
-      'Pure output transform, no DOM discovery — converged in 34 polls vs 99/144. Preview returned numeric 63. Real 49-row run: 0/49 numeric, still "37% OFF".',
+      'Approved without --auto-save, so the template was never persisted. Steps ended at user_approval; no save_new_template. Real run: 0/49 numeric.',
+  },
+  {
+    file: 'heal-4-autosave.json',
+    trigger: 'manual',
+    status: 'healed',
+    itemsBefore: 0,
+    itemsAfter: 48,
+    detail:
+      'Same prompt as #3 but with --auto-approve --auto-save. Steps ended with save_new_template. Real 49-row run: 48/49 numeric (the 1 remaining is a product with no discount, correctly null).',
   },
 ];
 

@@ -167,10 +167,12 @@ export async function runCycle({
       result = await runChunked({ collectorId, urls, onEvent });
       healed = true;
       updateHeal(healId, {
-        status: result.ok ? 'healed' : 'failed',
-        detail: result.ok
-          ? `Heal applied; re-run returned ${result.rows.length} rows`
-          : 'Heal applied but re-run still returned zero rows',
+        status: result.ok && heal.saved ? 'healed' : 'failed',
+        detail: !heal.saved
+          ? 'Heal completed but the template was NOT saved (no save_new_template step) — the collector still runs the old code'
+          : result.ok
+            ? `Heal saved; re-run returned ${result.rows.length} rows`
+            : 'Heal saved but re-run still returned zero rows',
         itemsAfter: result.rows.length,
       });
     } else {
@@ -254,10 +256,18 @@ export async function runCycle({
 
     const heal = await healScraper({ collectorId, prompt });
     updateHeal(healId, {
-      status: heal.awaitingApproval ? 'awaiting_approval' : heal.ok ? 'healed' : 'failed',
+      // A heal only counts as healed once save_new_template has run; without
+      // it every status field still reads success while nothing changed.
+      status: heal.awaitingApproval
+        ? 'awaiting_approval'
+        : heal.saved
+          ? 'healed'
+          : 'failed',
       detail: heal.awaitingApproval
-        ? 'Heal generated from degradation signals — awaiting approval'
-        : (heal.stderr || 'heal completed').slice(0, 300),
+        ? 'Heal generated from degradation signals — awaiting approval. Approve with --auto-save.'
+        : heal.saved
+          ? `Saved. Steps: ${heal.steps.join(' → ')}`
+          : 'Heal completed but the template was NOT saved — collector still runs the old code',
       itemsAfter: null,
     });
   }

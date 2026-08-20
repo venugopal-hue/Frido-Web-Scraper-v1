@@ -9,17 +9,18 @@ from plain-English descriptions of what looks wrong, not from selectors.
 
 Two surfaces read the same API: a minimal web dashboard and a Telegram bot.
 
-> **On the heals:** three real heals were generated and approved against this
-> collector. None of them changed the scraper's output. That is documented
-> honestly in [`scraper/heal-log.md`](scraper/heal-log.md), along with the
-> elimination process used to isolate why — it looks like a platform-side
-> issue in `@brightdata/cli` 0.3.5, not an application bug.
+> **The one thing to know about healing:** approving a heal and *saving* the
+> healed template are two different operations. Running the `next_step` command
+> the CLI prints (`bdata scraper approve <id>`) returns `status: "done"` while
+> silently leaving the fix unsaved — the next run still executes the old code.
+> Pass `--auto-save`. Details and the diagnosis in
+> [`scraper/heal-log.md`](scraper/heal-log.md).
 
 | | |
 |---|---|
 | **Collector ID** | `c_mt11rkfr1irkjzsb9` |
 | **Target** | `https://store.myfrido.com/collections/*` |
-| **Heal events** | 3 real heals, all approved — see [`scraper/heal-log.md`](scraper/heal-log.md) for what actually happened |
+| **Heal events** | 4 real heals — the fourth landed, taking `discount_percent` from 0/49 numeric to **48/49**. See [`scraper/heal-log.md`](scraper/heal-log.md) |
 | **Sample output** | [`scraper/sample-pillows.json`](scraper/sample-pillows.json) |
 
 ---
@@ -139,9 +140,10 @@ to mistake for a small catalogue. `runChunked()` in
 ### Image backfill — where healing was the wrong tool
 
 Frido's collection grid lazy-loads its product images: `src` stays a
-placeholder until a card scrolls into view. Two heals were spent trying to fix
-this and neither worked, because the production run never scrolls, so the image
-URL genuinely is not in the DOM it sees.
+placeholder until a card scrolls into view. Two heals were aimed at this and
+neither could have worked — the production run never scrolls, so the image URL
+is genuinely absent from the DOM the scraper sees. No prompt recovers data that
+is not on the page.
 
 The fix was not a better heal prompt. Shopify exposes
 `/products/{handle}.json` per product, which returns the full image list
@@ -286,21 +288,21 @@ Things worth knowing if you are reading the code or the heal log:
 - **`category` is not taken from the scraper output.** It fills that field
   sporadically and returns a badge ("Newly Launched") rather than the
   collection, so the backend derives it from the source collection URL instead.
-- **None of the three heals changed the scraper's output.** All three generated
-  a validated fix and were approved successfully (`status: "done"`), but a
-  subsequent `bdata scraper run` returned byte-identical output every time — on
-  the default *and* `dev` versions, and after waiting out any propagation delay.
-  This was isolated deliberately: heal #3 targeted a pure output transform
-  (`"63% OFF"` → `63`) requiring no DOM inspection at all, and still had zero
-  effect. [`scraper/heal-log.md`](scraper/heal-log.md) documents the full
-  elimination process. The heal *invocation* works; the heal *effect* does not
-  reach production output in `@brightdata/cli` 0.3.5.
+- **Approving a heal does not save it.** `bdata scraper approve <id>` — the
+  exact command the CLI's own `next_step` field tells you to run — approves the
+  fix without persisting the template, and reports `status: "done"` either way.
+  The next run keeps executing the old code. Pass `--auto-save` to `heal` or
+  `approve`. The tell is in `completed_steps`: a heal that landed ends with
+  `save_new_template`, one that did not ends at `user_approval`. Three heals
+  were lost to this before it was spotted.
 - **`bdata scraper run --version dev` is broken in 0.3.5.** The CLI's global
   `-v, --version` flag swallows it: it prints `0.3.5` and exits without running
   the scraper. Use `--version=dev`.
-- **The backend is written to survive a heal regardless.**
-  `normalizeProduct()` accepts both the string and numeric form of every field,
-  so whenever a heal does land, nothing downstream needs changing.
+- **The backend checks `saved`, not `status`.** A heal is recorded as healed
+  only when `save_new_template` appears in its steps — otherwise it is recorded
+  as failed with the reason, however successful the status field looks.
+- **`normalizeProduct()` accepts both shapes of every field**, so a heal that
+  changes `"63% OFF"` into `63` cannot break anything downstream.
 
 ## Security
 
