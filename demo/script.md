@@ -60,7 +60,7 @@ bdata scraper run c_mt11rkfr1irkjzsb9 \
 `localhost:3000`. Clean light UI — the product photos are the colour on the
 page, which is the point: they are shown exactly as the store serves them.
 
-- Status bar: **Healthy**, Collector ID, 146 products
+- Status bar: **Live**, Collector ID, 146 products
 - Stats row: products, average discount, total MRP savings, out of stock
 - Tap the **Pillows** chip, then sort by **Biggest discount**
 - Point out a **📦 pack price** card — "the tile says ₹349, but four of them
@@ -134,9 +134,9 @@ Cut to the dashboard timeline showing the before/after field coverage per heal.
 On a phone, or Telegram Desktop:
 
 - `/latest` → formatted prices
-- `/status` → health, last run, last heal event
+- `/status` → tracker state, last run, last heal event
 - `/heal images are coming back null` → admin-only, real CLI call from chat
-- Watch the dashboard status flip to **Healing** in the same shot
+- Watch the dashboard status flip to **Repairing** in the same shot
 
 > "Same database, same API. The bot does no scraping of its own — the two
 > surfaces can't drift apart."
@@ -148,9 +148,9 @@ Scroll `backend/src/pipeline.js`, pause on the failure branch:
 > "An empty extraction is treated as a broken scraper, not an empty catalogue.
 > That's what triggers the heal, automatically, at 3am, without me."
 
-Then `.github/workflows/scrape-and-heal.yml`.
+Then `backend/src/scheduler.js`.
 
-> "Every six hours. It fixes itself while you sleep."
+> "Runs every hour on its own. It fixes itself while you sleep."
 
 ---
 

@@ -269,12 +269,9 @@ live API without needing a token.
 
 ## Automation
 
-[`.github/workflows/scrape-and-heal.yml`](.github/workflows/scrape-and-heal.yml)
-runs the scrape every 6 hours, auto-heals on empty extraction, and caches the
-SQLite file between runs so the diff engine always has a previous snapshot to
-compare against.
-
-Locally, set `ENABLE_SCHEDULER=true` to use the in-process `node-cron` instead.
+The backend runs the scrape on a schedule with `node-cron` — set
+`ENABLE_SCHEDULER=true` and `CRON_SCHEDULE` (hourly by default). Each run is
+diffed against the previous snapshot, so alerts only fire on real change.
 
 ---
 

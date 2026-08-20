@@ -86,6 +86,9 @@ Frido Ultimate Cozy Pillow
   4 Pillows → ₹574.80/unit  (total ₹2,299)   ← 18% cheaper per unit
 ```
 
+Raw output: [`create-packs.json`](create-packs.json) ·
+[`sample-packs.json`](sample-packs.json)
+
 Created with:
 
 ```bash
@@ -138,9 +141,16 @@ normalisation — see `normalizeProduct()` in
 
 See [`heal-log.md`](heal-log.md) for the full break → heal → verify record.
 
-Both heals returned `status: "awaiting_approval"` rather than applying
-silently, so each needed:
+Heals stop at an approval gate rather than applying silently. **Approving is
+not the same as saving** — `bdata scraper approve <id>` on its own leaves the
+healed template unpersisted while still reporting `status: "done"`, so the next
+run keeps executing the old code. Always pass `--auto-save`:
 
 ```bash
-bdata scraper approve c_mt11rkfr1irkjzsb9
+bdata scraper approve c_mt11rkfr1irkjzsb9 --auto-save
+# or, to skip the gate entirely:
+bdata scraper heal c_mt11rkfr1irkjzsb9 "<what broke>" --auto-approve --auto-save
 ```
+
+The tell is in `completed_steps`: a heal that landed ends with
+`save_new_template`.
