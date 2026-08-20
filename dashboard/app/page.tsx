@@ -83,12 +83,9 @@ export default function Page() {
 
         <StatsRow products={products} />
 
-        {/* The catalogue runs to a few hundred items, so it gets the full
-            width; the timeline and bot card sit below rather than squeezing
-            the grid into a narrow column. */}
-        <ProductGrid products={products} loading={loading} onSelect={setSelected} />
-
-        {/* min-w-0: grid items default to min-width:auto and refuse to shrink
+        {/* Self-healing is the whole point of the project, so it sits above the
+            catalogue rather than under a few hundred product cards.
+            min-w-0: grid items default to min-width:auto and refuse to shrink
             below their content, so one long unbreakable string (a heal's raw
             CLI output) would otherwise blow the column out of the page. */}
         <div className="grid min-w-0 gap-6 lg:grid-cols-[1.5fr_1fr]">
@@ -100,9 +97,15 @@ export default function Page() {
           </div>
         </div>
 
-        <footer className="border-t border-[--border] pt-6 text-center text-[12px] text-[--text-faint]">
-          Built for Into the Scrape-Verse · Bright Data Scraper Studio ·{' '}
-          <span className="font-mono">{status?.collector_id ?? '—'}</span>
+        <ProductGrid products={products} loading={loading} onSelect={setSelected} />
+
+        <footer className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-t border-[--border] pt-6 text-[12px] text-[--text-faint]">
+          <span>© {new Date().getFullYear()} Impact Makers</span>
+          <span>Built for everyday shoppers who hate overpaying</span>
+          <span>
+            Powered by Bright Data Scraper Studio ·{' '}
+            <span className="font-mono">{status?.collector_id ?? '—'}</span>
+          </span>
         </footer>
       </div>
 

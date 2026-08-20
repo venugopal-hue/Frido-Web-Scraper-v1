@@ -21,10 +21,23 @@ export default function ProductGrid({
   const [sort, setSort] = useState<Sort>('discount');
   const [inStockOnly, setInStockOnly] = useState(false);
 
-  const categories = useMemo(
-    () => ['All', ...Array.from(new Set(products.map((p) => p.category ?? 'Uncategorised'))).sort()],
-    [products]
-  );
+  /**
+   * Chips ordered by how many products they hold, biggest first.
+   * Alphabetical put one-item oddities ("Back Pain", "Frido Covers") ahead of
+   * the categories people actually browse, and pushed Cushions (32) to the
+   * second row.
+   */
+  const categories = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const p of products) {
+      const c = p.category ?? 'Uncategorised';
+      counts.set(c, (counts.get(c) ?? 0) + 1);
+    }
+    const ordered = [...counts.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([name, n]) => ({ name, n }));
+    return [{ name: 'All', n: products.length }, ...ordered];
+  }, [products]);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -61,13 +74,31 @@ export default function ProductGrid({
   return (
     <section className="space-y-5">
       <div className="flex flex-wrap items-center gap-3">
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search products"
-          aria-label="Search products"
-          className={`${inputClass} min-w-[200px] flex-1`}
-        />
+        <div className="relative w-full sm:w-[280px]">
+          <svg
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[--text-faint]"
+            width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden
+          >
+            <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
+            <path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search products"
+            aria-label="Search products"
+            className={`${inputClass} w-full pl-9 pr-8`}
+          />
+          {query && (
+            <button
+              onClick={() => setQuery('')}
+              aria-label="Clear search"
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-1.5 text-[--text-faint] hover:text-[--text]"
+            >
+              ×
+            </button>
+          )}
+        </div>
         <select
           value={sort}
           onChange={(e) => setSort(e.target.value as Sort)}
@@ -88,30 +119,34 @@ export default function ProductGrid({
           />
           In stock only
         </label>
-        <span className="text-[13px] text-[--text-faint]">{visible.length} shown</span>
+        <span className="ml-auto text-[13px] text-[--text-muted]">
+          <span className="font-medium text-[--text]">{visible.length}</span>
+          {visible.length !== products.length && ` of ${products.length}`} products
+        </span>
       </div>
 
       <div className="flex flex-wrap gap-1.5">
-        {categories.map((c) => {
-          const active = c === category;
-          const n =
-            c === 'All'
-              ? products.length
-              : products.filter((p) => (p.category ?? 'Uncategorised') === c).length;
+        {categories.map(({ name, n }) => {
+          const active = name === category;
           return (
             <button
-              key={c}
-              onClick={() => setCategory(c)}
+              key={name}
+              onClick={() => setCategory(name)}
               aria-pressed={active}
               className={[
-                'rounded-full border px-3 py-1 text-[12px] transition',
+                'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[12px] transition',
                 active
                   ? 'border-neutral-900 bg-neutral-900 text-white'
-                  : 'border-[--border] bg-white text-[--text-muted] hover:border-neutral-400',
+                  : 'border-[--border] bg-white text-[--text-muted] hover:border-neutral-400 hover:text-[--text]',
               ].join(' ')}
             >
-              {c}
-              <span className={active ? 'ml-1.5 text-white/60' : 'ml-1.5 text-[--text-faint]'}>
+              {name}
+              <span
+                className={[
+                  'rounded-full px-1.5 text-[11px] tabular-nums',
+                  active ? 'bg-white/20 text-white' : 'bg-neutral-100 text-[--text-faint]',
+                ].join(' ')}
+              >
                 {n}
               </span>
             </button>

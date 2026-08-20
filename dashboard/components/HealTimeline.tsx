@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { HealEvent, timeAgo, parseCoverage } from '@/lib/api';
 import Card from './Card';
 
@@ -54,7 +55,12 @@ function CoverageDiff({ event }: { event: HealEvent }) {
   );
 }
 
+const COMPACT_COUNT = 3;
+
 export default function HealTimeline({ events }: { events: HealEvent[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const shown = expanded ? events : events.slice(0, COMPACT_COUNT);
+
   return (
     <Card className="p-5">
       <div className="flex items-baseline justify-between gap-3">
@@ -71,11 +77,11 @@ export default function HealTimeline({ events }: { events: HealEvent[] }) {
           No heal events recorded yet.
         </p>
       ) : (
-        <ol className="mt-5 space-y-4">
-          {events.map((e) => {
+        <ol className="mt-4 space-y-3">
+          {shown.map((e) => {
             const s = STYLES[e.status] ?? STYLES.failed;
             return (
-              <li key={e.id} className="border-t border-[--border] pt-4 first:border-0 first:pt-0">
+              <li key={e.id} className="border-t border-[--border] pt-3 first:border-0 first:pt-0">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px]">
                   <span className={`h-1.5 w-1.5 rounded-full ${s.dot}`} />
                   <span className={`font-medium ${s.text}`}>{s.label}</span>
@@ -90,16 +96,33 @@ export default function HealTimeline({ events }: { events: HealEvent[] }) {
                   )}
                 </div>
 
-                {/* break-words: raw CLI output can arrive as one long token. */}
-                <p className="mt-1.5 line-clamp-2 break-words text-[13px] leading-relaxed text-[--text-muted]">
+                {/* break-words: raw CLI output can arrive as one long token.
+                    Collapsed to a single line so four heals do not dominate
+                    the top of the page. */}
+                <p
+                  className={`mt-1 break-words text-[13px] leading-relaxed text-[--text-muted] ${
+                    expanded ? '' : 'line-clamp-1'
+                  }`}
+                >
                   {e.prompt}
                 </p>
 
-                <CoverageDiff event={e} />
+                {expanded && <CoverageDiff event={e} />}
               </li>
             );
           })}
         </ol>
+      )}
+
+      {events.length > 0 && (
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-4 w-full rounded-lg border border-[--border] py-1.5 text-[12px] text-[--text-muted] transition hover:border-neutral-400 hover:text-[--text]"
+        >
+          {expanded
+            ? 'Show less'
+            : `Show all ${events.length} events and field coverage`}
+        </button>
       )}
     </Card>
   );
