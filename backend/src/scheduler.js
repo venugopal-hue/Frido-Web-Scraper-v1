@@ -3,6 +3,7 @@ import { runCycle } from './pipeline.js';
 import { targetUrls } from './targets.js';
 import { notifySubscribers, notifyWatchers } from './notify.js';
 import { formatDiff, HEAL_ALERT } from './format-alert.js';
+import { trackProgress, clearProgress } from './progress.js';
 
 /**
  * Scheduled scrape. Every completed cycle is diffed against the previous
@@ -22,7 +23,12 @@ export function startScheduler() {
       const result = await runCycle({
         urls: targetUrls(),
         autoHeal: true,
-        onEvent: (e) => console.log('[scheduler]', e.type),
+        // Report into the same shared progress the dashboard reads, so a
+        // scheduled run shows its phase just like a manual one.
+        onEvent: (e) => {
+          trackProgress(e);
+          console.log('[scheduler]', e.type, e.chunk ? `${e.chunk}/${e.of}` : '');
+        },
       });
 
       if (result.healed) {
@@ -36,6 +42,8 @@ export function startScheduler() {
       }
     } catch (err) {
       console.error('[scheduler] cycle failed:', err);
+    } finally {
+      clearProgress();
     }
   });
 

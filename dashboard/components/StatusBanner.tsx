@@ -25,6 +25,19 @@ export default function StatusBanner({
   const state = STATES[status.health] ?? STATES.unknown;
   const busy = refreshing || status.scraping;
 
+  // A full scrape is 8 sequential chunk jobs and can take 20 minutes. Without
+  // a phase label the bar just reads "Scraping" the whole time and looks hung.
+  const p = status.progress;
+  const progressLabel = !p
+    ? null
+    : p.phase === 'scraping' && p.of
+      ? `batch ${p.chunk} of ${p.of}`
+      : p.phase === 'images'
+        ? `fetching ${p.count} images`
+        : p.phase === 'healing'
+          ? 'repairing scraper'
+          : 'starting';
+
   return (
     <header className="flex flex-wrap items-center gap-x-8 gap-y-4 border-b border-[--border] pb-6">
       <div className="mr-auto">
@@ -34,6 +47,12 @@ export default function StatusBanner({
             <span className={`h-1.5 w-1.5 rounded-full ${state.dot}`} />
             <span className={state.text}>{state.label}</span>
           </span>
+          {progressLabel && (
+            <>
+              <span className="text-[--text-faint]">·</span>
+              <span className="text-[--text-muted]">{progressLabel}</span>
+            </>
+          )}
           <span className="text-[--text-faint]">·</span>
           <span>{status.last_run?.item_count ?? 0} products</span>
           <span className="text-[--text-faint]">·</span>

@@ -106,8 +106,16 @@ export type Health =
   | 'running'
   | 'unknown';
 
+export type Progress = {
+  phase: 'starting' | 'scraping' | 'images' | 'healing';
+  chunk?: number;
+  of?: number | null;
+  count?: number;
+};
+
 export type Status = {
   health: Health;
+  progress?: Progress | null;
   collector_id: string;
   last_run: Run | null;
   scraping: boolean;

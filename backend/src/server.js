@@ -25,6 +25,7 @@ import {
 import { runCycle } from './pipeline.js';
 import { healScraper, approveHeal, COLLECTOR_ID } from './brightdata.js';
 import { startScheduler } from './scheduler.js';
+import { getProgress, trackProgress, clearProgress } from './progress.js';
 import { withDealScores } from './deal-score.js';
 import { targetUrls } from './targets.js';
 
@@ -121,6 +122,7 @@ app.get('/api/status', (_req, res) => {
     collector_id: COLLECTOR_ID,
     last_run: run ?? null,
     scraping: Boolean(inFlight),
+    progress: getProgress(),
     last_heal: events[0] ?? null,
     recent_heals: events,
     subscribers: allSubscribers().length,
@@ -137,10 +139,11 @@ app.post('/api/refresh', requireAdmin, async (req, res) => {
     : targetUrls();
   const autoHeal = req.body?.autoHeal !== false;
 
-  inFlight = runCycle({ urls, autoHeal })
+  inFlight = runCycle({ urls, autoHeal, onEvent: trackProgress })
     .catch((err) => ({ ok: false, error: String(err) }))
     .finally(() => {
       inFlight = null;
+      clearProgress();
     });
 
   if (req.body?.wait === false) {

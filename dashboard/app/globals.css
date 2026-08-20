@@ -38,6 +38,9 @@ body {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius);
+    /* A hairline shadow, not a drop shadow — enough to lift the card off the
+       page without turning a clean grid into a field of floating boxes. */
+    box-shadow: 0 1px 2px rgba(20, 20, 40, 0.04);
   }
 
   /* Hover is a border darkening rather than a lift — quieter, and it does not
@@ -49,7 +52,7 @@ body {
   }
   .card--interactive:hover {
     border-color: var(--border-strong);
-    box-shadow: 0 1px 3px rgba(20, 20, 40, 0.06);
+    box-shadow: 0 4px 16px rgba(20, 20, 40, 0.08);
   }
 
   .skeleton {

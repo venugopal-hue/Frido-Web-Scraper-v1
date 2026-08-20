@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
 import { Product, inr, isOutOfStock, DEAL_LABELS } from '@/lib/api';
 import Card from './Card';
 
@@ -124,10 +125,19 @@ export default function ProductGrid({
         </Card>
       ) : (
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {visible.map((p) => {
+          {visible.map((p, i) => {
             const out = isOutOfStock(p.availability);
             return (
-              <Card key={p.id} interactive className="flex flex-col overflow-hidden">
+              <motion.div
+                key={p.id}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                /* Stagger only across the first screenful — running it over
+                   146 cards would make the last one appear seconds late. */
+                transition={{ duration: 0.25, delay: Math.min(i, 8) * 0.03, ease: 'easeOut' }}
+                className="flex"
+              >
+              <Card interactive className="flex w-full flex-col overflow-hidden">
                 <button
                   onClick={() => onSelect(p)}
                   className="flex flex-1 flex-col text-left"
@@ -149,6 +159,11 @@ export default function ProductGrid({
                         No image
                       </div>
                     )}
+                    {p.discount_percent && p.discount_percent >= 25 ? (
+                      <span className="absolute right-2 top-2 rounded-md bg-neutral-900 px-1.5 py-0.5 text-[11px] font-semibold text-white">
+                        -{Math.round(p.discount_percent)}%
+                      </span>
+                    ) : null}
                     {out && (
                       <span className="absolute left-2 top-2 rounded bg-white/90 px-2 py-0.5 text-[11px] font-medium text-rose-600 ring-1 ring-rose-200">
                         Sold out
@@ -209,17 +224,36 @@ export default function ProductGrid({
                   </div>
                 </button>
 
-                {p.product_url && (
+                {/* Two explicit actions. The card itself is still clickable,
+                    but an invisible affordance is not an affordance — the
+                    price-history view went unnoticed without a real button. */}
+                <div className="grid grid-cols-2 border-t border-[--border] text-[12px]">
+                  <button
+                    onClick={() => onSelect(p)}
+                    className="flex items-center justify-center gap-1.5 border-r border-[--border] py-2.5 text-[--text-muted] transition hover:bg-neutral-50 hover:text-[--text]"
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden>
+                      <path
+                        d="M3 17l5-6 4 3 5-7 4 4"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    Price history
+                  </button>
                   <a
-                    href={p.product_url}
+                    href={p.product_url ?? '#'}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="border-t border-[--border] px-4 py-2.5 text-center text-[12px] text-[--text-muted] transition hover:bg-neutral-50 hover:text-[--text]"
+                    className="flex items-center justify-center py-2.5 text-[--text-muted] transition hover:bg-neutral-50 hover:text-[--text]"
                   >
-                    View on store
+                    View on store ↗
                   </a>
-                )}
+                </div>
               </Card>
+              </motion.div>
             );
           })}
         </div>
