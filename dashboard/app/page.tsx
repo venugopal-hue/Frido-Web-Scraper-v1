@@ -101,10 +101,8 @@ export default function Page() {
 
         <footer className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-t border-[--border] pt-6 text-[12px] text-[--text-faint]">
           <span>© {new Date().getFullYear()} Impact Makers</span>
-          <span>Built for everyday shoppers who hate overpaying</span>
           <span>
-            Powered by Bright Data Scraper Studio ·{' '}
-            <span className="font-mono">{status?.collector_id ?? '—'}</span>
+            Built for everyday shoppers who hate overpaying · Powered by Bright Data Scraper Studio
           </span>
         </footer>
       </div>
