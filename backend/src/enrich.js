@@ -31,16 +31,26 @@ async function pooled(items, limit, worker) {
  */
 export async function enrichProducts(
   products,
-  { concurrency = Number(process.env.ENRICH_CONCURRENCY) || 5, onEvent = () => {} } = {}
+  {
+    concurrency = Number(process.env.ENRICH_CONCURRENCY) || 5,
+    /**
+     * 'missing' — only products with no image. One request per new product,
+     *   which on a repeat run is usually zero. This is the right default for a
+     *   frequent schedule: product photos essentially never change, and
+     *   re-fetching all of them hourly is thousands of pointless requests.
+     * 'all' — re-point every product at the store's current images[0].
+     *   Use `npm run refresh-images` for that instead.
+     */
+    mode = process.env.ENRICH_MODE ?? 'missing',
+    onEvent = () => {},
+  } = {}
 ) {
-  // Every product is enriched, not just the ones missing an image: the few the
-  // grid did supply were lazy-load placeholders or secondary shots, so taking
-  // images[0] from Shopify for all of them keeps the catalogue consistent with
-  // what the store itself shows.
-  const missing = products.filter((p) => p.product_url);
+  const missing = products.filter(
+    (p) => p.product_url && (mode === 'all' || !p.image_url)
+  );
   if (!missing.length) return { attempted: 0, filled: 0 };
 
-  onEvent({ type: 'enrich_started', count: missing.length });
+  onEvent({ type: 'enrich_started', count: missing.length, mode });
 
   let filled = 0;
   let failed = 0;
