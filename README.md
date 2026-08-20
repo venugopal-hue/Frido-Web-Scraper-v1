@@ -1,221 +1,134 @@
-# Frido Price Tracker — a scraper that repairs itself
+<div align="center">
 
-**Into the Scrape-Verse** (WeMakeDevs × Bright Data), August 2026
+# 🛒 Frido Price Tracker
 
-Live price and stock tracking for [Frido](https://store.myfrido.com), an Indian
-D2C ergonomics brand, built on a **Bright Data Scraper Studio** collector and a
-pipeline that detects its own breakage and calls `bdata scraper heal` — driven
-from plain-English descriptions of what looks wrong, not from selectors.
+**A scraper that repairs itself when the site changes.**
 
-Two surfaces read the same API: a minimal web dashboard and a Telegram bot.
+Live price, stock and deal tracking across [store.myfrido.com](https://store.myfrido.com) —
+built on Bright Data Scraper Studio, with a web dashboard and a Telegram bot.
 
-> **The one thing to know about healing:** approving a heal and *saving* the
-> healed template are two different operations. Running the `next_step` command
-> the CLI prints (`bdata scraper approve <id>`) returns `status: "done"` while
-> silently leaving the fix unsaved — the next run still executes the old code.
-> Pass `--auto-save`. Details and the diagnosis in
-> [`scraper/heal-log.md`](scraper/heal-log.md).
+![Node](https://img.shields.io/badge/Node-22.5%2B-339933?logo=node.js&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js-14-000000?logo=next.js&logoColor=white)
+![SQLite](https://img.shields.io/badge/SQLite-node%3Asqlite-003B57?logo=sqlite&logoColor=white)
+![Telegram](https://img.shields.io/badge/Telegram-Bot-26A5E4?logo=telegram&logoColor=white)
+![Bright Data](https://img.shields.io/badge/Bright%20Data-Scraper%20Studio-0F62FE)
+
+</div>
+
+---
+
+## 📊 What it tracks
 
 | | |
 |---|---|
-| **Collector ID** | `c_mt11rkfr1irkjzsb9` |
-| **Target** | `https://store.myfrido.com/collections/*` |
-| **Heal events** | 4 real heals — the fourth landed, taking `discount_percent` from 0/49 numeric to **48/49**. See [`scraper/heal-log.md`](scraper/heal-log.md) |
-| **Sample output** | [`scraper/sample-pillows.json`](scraper/sample-pillows.json) |
+| 🛍️ Products | **140** across 16 categories |
+| 🖼️ With images | **140** (100%) |
+| 📦 Cheaper in a multi-pack | **33** |
+| 🏷️ Average discount | **44%** |
+| ⛔ Currently sold out | **23** |
+| 💰 Total below MRP | **₹3,10,731** |
+
+Refreshed **hourly**, with every run stored so prices can be compared over time.
 
 ---
 
-## The problem
+## 🎯 The problem
 
-Frido runs near-permanent discount campaigns — average discount across the
-catalogue is **51%**, and **29% of tracked products were already sold out** on
-the first run. Prices and stock move constantly, and there is no price history,
-no restock notification, and no way to tell whether today's "72% OFF" is
-actually better than last week's.
+Frido runs near-permanent discount campaigns, so prices and stock move
+constantly — and nothing tells you whether today's "72% off" is actually a good
+price, or when a sold-out item comes back.
 
-Scraping it is not trivial either. The product grid is **client-side rendered**:
+Scraping it is not straightforward either. **The product grid is rendered
+client-side:**
 
 ```bash
-bdata scrape https://store.myfrido.com/collections/tt-pillows --format markdown
-# 669 lines of nav and footer. Exactly one "₹" on the page — a promo banner.
-# Zero products. Zero prices.
+bdata scrape https://store.myfrido.com/collections/tt-pillows --format markdown | grep -c "₹"
+# 1   ← and that one is a promo banner
 ```
 
-`/collections/*/products.json`, the usual Shopify escape hatch, redirects back
-to HTML. So a plain HTTP fetch gets you nothing, and any CSS selector you write
-by hand against a Shopify theme is one deploy away from breaking.
+669 lines of navigation and footer. Zero products, zero prices.
+`/collections/*/products.json` — the usual Shopify escape hatch — redirects
+back to HTML.
 
-That is the case for a self-healing scraper.
-
-## What it does
-
-- **Tracks** name, price, MRP, discount, availability, URL and image across
-  Frido's whole catalogue — 146 products, 31 collections
-- **Detects its own degradation** — not just zero rows, but coverage
-  regressions, row-count collapse and prices that stop parsing
-- **Heals itself** by calling `bdata scraper heal` with a description of the
-  symptom, then re-running and recording the before/after field coverage
-- **Finds pack pricing the storefront hides** — a mask listed at ₹349 costs
-  ₹174.80 per unit in a four-pack, a better deal than the headline discount
-- **Scores prices against their own history** — "is this actually cheap?"
-  rather than "what is the MRP discount?"
-- **Diffs** each run against the previous snapshot: price drops, restocks,
-  sold-outs, new products
-- **Alerts** Telegram — catalogue-wide for subscribers, per-product for
-  watchers
+So a plain fetch gets nothing, and any hand-written CSS selector is one theme
+deploy away from breaking. That is the case for a self-healing scraper.
 
 ---
 
-## Architecture
+## ✨ Features
 
-```
-                    Bright Data Scraper Studio
-                    collector c_mt11rkfr1irkjzsb9
-                              │
-                    bdata scraper run / heal / approve
-                              │
-                      backend/src/pipeline.js
-                  ┌───────────┴───────────┐
-            run returns rows?        zero rows
-                  │                       │
-            dedupe by URL          bdata scraper heal
-                  │                       │
-          enrich missing images     re-run & record
-                  │                       │
-              diff vs prev                │
-                  └───────────┬───────────┘
-                        SQLite (node:sqlite)
-                              │
-                      Express API :4000
-                     ┌────────┴────────┐
-              Next.js dashboard    Telegram bot
-```
-
-One database, one API, two surfaces — the bot performs no scraping of its own,
-so the two views cannot drift apart.
-
-### The self-healing loop
-
-`backend/src/pipeline.js` is the core. An empty extraction is the failure
-signal:
-
-```js
-let result = await runScraper({ collectorId, urls });
-
-if (!result.ok && autoHeal) {
-  const healId = recordHeal({ trigger: 'auto', status: 'healing', ... });
-  const heal = await healScraper({ collectorId, prompt: healPrompt });
-
-  if (heal.awaitingApproval) {
-    // Bright Data can return a heal that needs sign-off. We surface it on the
-    // dashboard rather than auto-approving — a scraper that rewrites itself
-    // unsupervised is not obviously a good idea.
-    updateHeal(healId, { status: 'awaiting_approval' });
-    return { ok: false, healAwaitingApproval: true };
-  }
-
-  result = await runScraper({ collectorId, urls }); // re-run after the fix
-}
-```
-
-Every cycle lands in `heal_events` and renders on the dashboard timeline.
-
-### Batch runs are capped — chunk them
-
-Passing all 31 collection URLs to a single `bdata scraper run --urls` call
-returns roughly **5 products per collection**, silently. The same collector,
-given 4 URLs at a time, returns the full grid:
-
-| Collection | 31 URLs at once | 4 URLs at a time |
-|---|---|---|
-| Orthotics | 2 | **17** |
-| Insoles | 8 | **11** |
-| Socks | 7 | **9** |
-
-Nothing errors — the run reports success with a short result set, so it is easy
-to mistake for a small catalogue. `runChunked()` in
-[`pipeline.js`](backend/src/pipeline.js) splits the URL list into batches of
-`SCRAPE_CHUNK_SIZE` (default 4) and concatenates the rows.
-
-### Image backfill — where healing was the wrong tool
-
-Frido's collection grid lazy-loads its product images: `src` stays a
-placeholder until a card scrolls into view. Two heals were aimed at this and
-neither could have worked — the production run never scrolls, so the image URL
-is genuinely absent from the DOM the scraper sees. No prompt recovers data that
-is not on the page.
-
-The fix was not a better heal prompt. Shopify exposes
-`/products/{handle}.json` per product, which returns the full image list
-directly, so [`backend/src/enrich.js`](backend/src/enrich.js) backfills any row
-that came back without an image — five requests in flight at a time.
-
-That took image coverage from **~8%** to near-complete. Worth stating plainly:
-self-healing is for a scraper whose selectors have drifted, not for data that
-was never on the page.
+- 🔧 **Self-healing** — describe what looks wrong in plain English, the scraper
+  rewrites its own extraction logic
+- 🩺 **Degradation detection** — not just "zero rows": coverage regressions,
+  row-count collapse and prices that stop parsing all trigger a repair
+- 📦 **Pack pricing the storefront hides** — a mask listed at ₹349 costs
+  **₹174.80 per unit** in a four-pack
+- 📈 **Price history** — every run kept, so "is this cheap?" has a real answer
+- 🔔 **Alerts** — price drops, restocks and new products, catalogue-wide or for
+  one product you follow
+- 🤖 **Two surfaces, one API** — dashboard and bot cannot drift apart
 
 ---
 
-## Setup
+## 🏗️ Architecture
 
-Requires **Node 22.5+** (the backend uses the built-in `node:sqlite` — no
-native compilation) and a Bright Data account.
-
-```bash
-git clone <your-repo-url>
-cd scrape-verse-project
+```
+              Bright Data Scraper Studio
+        c_mt11rkfr1irkjzsb9 · c_mt15pipw2hu94v7ehy
+                          │
+              bdata scraper run / heal / approve
+                          │
+                  backend/src/pipeline.js
+              ┌───────────┴───────────┐
+        rows returned?           nothing returned
+              │                         │
+        dedupe by URL            bdata scraper heal
+              │                         │
+      backfill missing images    re-run & record
+              │                         │
+        check for degradation           │
+              └───────────┬─────────────┘
+                    SQLite (node:sqlite)
+                          │
+                   Express API :4000
+                  ┌───────┴───────┐
+          Next.js dashboard   Telegram bot
 ```
 
-### 1. Bright Data CLI
+---
+
+## 🚀 Setup
+
+Requires **Node 22.5+** — the backend uses the built-in `node:sqlite`, so
+there is no native build step.
+
+### 1 · Bright Data CLI
 
 ```bash
 npx -p @brightdata/cli bdata login
 ```
 
-Apply the promo code `wemakedevs` in Billing for $50 of credit. Verify:
-
-```bash
-npx -p @brightdata/cli bdata budget
-```
-
-### 2. Backend
+### 2 · Backend
 
 ```bash
 cd backend
 npm install
-cp .env.example .env      # COLLECTOR_ID is pre-filled
+cp .env.example .env      # collector IDs are pre-filled
 npm start                 # → http://localhost:4000
+npm run scrape            # first data
 ```
 
-First data:
-
-```bash
-npm run scrape            # real bdata scraper run, auto-heals on degradation
-```
-
-Other jobs:
-
-| Command | What it does |
-|---|---|
-| `npm run scrape` | Full catalogue: chunked runs, dedupe, image backfill, anomaly check |
-| `npm run scrape-packs` | Multi-pack pricing from product pages (second collector) |
-| `npm run refresh-images` | Re-point every product at the store's own first image |
-| `npm run seed-categories` | Rediscover collections from the category index |
-| `npm run demo-break` | Simulated break → auto-heal fires, for the demo video |
-| `npm run import-heals` | Load CLI-run heal artifacts into the timeline |
-
-### 3. Dashboard
+### 3 · Dashboard
 
 ```bash
 cd dashboard
-npm install
-npm run dev               # → http://localhost:3000
+npm install && npm run dev    # → http://localhost:3000
 ```
 
-`/api/*` is proxied to the backend, so no CORS setup and no separate API URL in
-the browser.
+`/api/*` proxies to the backend, so there is no CORS setup and no API URL in
+the client bundle.
 
-### 4. Telegram bot
+### 4 · Telegram bot
 
 Create a bot with [@BotFather](https://t.me/BotFather), then:
 
@@ -226,84 +139,122 @@ cp .env.example .env      # paste TELEGRAM_BOT_TOKEN
 npm start
 ```
 
-Send `/heal` once to learn your chat ID, then put it in
-`TELEGRAM_ADMIN_CHAT_IDS` to unlock the admin commands.
+Send `/heal` once to learn your chat ID, then add it to
+`TELEGRAM_ADMIN_CHAT_IDS` for the admin commands.
+
+> ⚠️ The **backend** sends alerts, not the bot — put the same token in
+> `backend/.env` too, or broadcasts silently do nothing.
 
 ---
 
-## API
+## 🛠️ Commands
 
-| Method | Route | Purpose |
+```bash
+npm run scrape           # full catalogue: chunked runs, dedupe, images, health check
+npm run scrape-packs     # multi-pack pricing from product pages
+npm run refresh-images   # re-point every product at the store's first image
+npm run seed-categories  # rediscover collections
+npm run demo-break       # simulated break → auto-heal fires
+```
+
+---
+
+## 🤖 Bot commands
+
+| Command | What it does |
+|---|---|
+| `/deals` | Discount bands as tap-through buttons, with counts |
+| `/latest` | Top 20 by discount |
+| `/categories` | Item counts and entry prices |
+| `/watch <name>` | Follow one product |
+| `/watchlist` · `/unwatch` | Manage what you follow |
+| `/subscribe` · `/unsubscribe` | Catalogue-wide alerts |
+| `/status` | Tracker state, last run, last repair |
+
+Admin only: `/heal <what broke>`, `/approve`, `/refresh`.
+
+---
+
+## 🔌 API
+
+| Method | Route | Returns |
 |---|---|---|
-| `GET` | `/api/data` | Latest snapshot |
-| `GET` | `/api/status` | Health, last run, last heal, subscriber count |
-| `GET` | `/api/heals` | Full heal timeline |
+| `GET` | `/api/data` | Latest snapshot, with deal scores and pack pricing |
+| `GET` | `/api/status` | State, last run, last repair, progress |
+| `GET` | `/api/heals` | Repair timeline with field coverage |
 | `GET` | `/api/history?url=` | Price points for one product |
 | `GET` | `/api/runs` | Recent run log |
-| `POST` | `/api/refresh` | Trigger a scrape (auto-heals) |
-| `POST` | `/api/heal` | Manual `bdata scraper heal` |
-| `POST` | `/api/heal/approve` | Approve or reject a pending heal |
+| `POST` | `/api/refresh` | Trigger a scrape |
+| `POST` | `/api/heal` · `/api/heal/approve` | Repair the scraper |
 
-Write endpoints honour `ADMIN_TOKEN` via the `x-admin-token` header when set.
-
-## Telegram commands
-
-| Command | Behaviour |
-|---|---|
-| `/deals` | Discount bands as tappable buttons — `Under 25%`, `25–39%`, `40–49%`, `50–69%`, `70%+`, with counts |
-| `/latest` | Top 20 of the catalogue, discounts first |
-| `/categories` | Item counts and entry prices per category |
-| `/watch <name>` | Follow one product; disambiguates when a name is ambiguous |
-| `/watchlist` · `/unwatch <name>` | Manage what you follow |
-| `/subscribe` · `/unsubscribe` | Catalogue-wide price and stock alerts |
-| `/status` | Scraper health, last run, last heal |
-| `/heal <what broke>` | Admin — real `bdata scraper heal` from chat |
-| `/approve` | Admin — approve a heal awaiting sign-off |
-| `/refresh` | Admin — trigger a scrape |
-
-Bands are **exclusive**: `50–69%` does not include the 70%+ items. Long lists
-paginate inside one message, edited in place, so the keyboard stays attached.
-
-Run `npm run preview` in `telegram-bot/` to render every message against the
-live API without needing a token.
-
-## Automation
-
-The backend runs the scrape on a schedule with `node-cron` — set
-`ENABLE_SCHEDULER=true` and `CRON_SCHEDULE` (hourly by default). Each run is
-diffed against the previous snapshot, so alerts only fire on real change.
+Write routes honour `ADMIN_TOKEN` via the `x-admin-token` header. **Set it
+before exposing the API** — those routes spend Bright Data credit, and the
+check is skipped when the token is blank.
 
 ---
 
-## Honest notes
+## 🧠 Three things worth knowing
 
-Things worth knowing if you are reading the code or the heal log:
+Each of these cost real debugging time and none of them announce themselves.
 
-- **`rating` and `review_count` are always null.** They are not rendered on
-  collection pages. The columns are kept nullable so a later heal aimed at
-  product detail pages can fill them without a migration.
-- **`category` is not taken from the scraper output.** It fills that field
-  sporadically and returns a badge ("Newly Launched") rather than the
-  collection, so the backend derives it from the source collection URL instead.
-- **Approving a heal does not save it.** `bdata scraper approve <id>` — the
-  exact command the CLI's own `next_step` field tells you to run — approves the
-  fix without persisting the template, and reports `status: "done"` either way.
-  The next run keeps executing the old code. Pass `--auto-save` to `heal` or
-  `approve`. The tell is in `completed_steps`: a heal that landed ends with
-  `save_new_template`, one that did not ends at `user_approval`. Three heals
-  were lost to this before it was spotted.
-- **`bdata scraper run --version dev` is broken in 0.3.5.** The CLI's global
-  `-v, --version` flag swallows it: it prints `0.3.5` and exits without running
-  the scraper. Use `--version=dev`.
-- **The backend checks `saved`, not `status`.** A heal is recorded as healed
-  only when `save_new_template` appears in its steps — otherwise it is recorded
-  as failed with the reason, however successful the status field looks.
-- **`normalizeProduct()` accepts both shapes of every field**, so a heal that
-  changes `"63% OFF"` into `63` cannot break anything downstream.
+### Approving a repair does not save it
 
-## Security
+`bdata scraper approve <id>` — the exact command the CLI's own `next_step`
+field tells you to run — approves the fix **without persisting the template**,
+and reports `status: "done"` either way. The next run silently executes the old
+code.
 
-`.env` files are gitignored; `.env.example` carries placeholders only. The
-Collector ID is not a secret (it is an identifier, useless without account
-credentials) so it is committed deliberately to make the project reproducible.
-The Bright Data API key and Telegram token never appear in the repo.
+The tell is in `completed_steps`:
+
+```
+approve alone         … step_advance → user_approval
+approve --auto-save   … step_advance → user_approval → save_new_template
+```
+
+Three repairs were lost to this. The pipeline now checks for
+`save_new_template` rather than trusting the status field. Full diagnosis in
+[`scraper/heal-log.md`](scraper/heal-log.md).
+
+### Large batches are silently capped
+
+Passing all 31 collection URLs to one `run --urls` call returns roughly five
+products per collection. Same collector, four URLs at a time:
+
+| Collection | 31 at once | 4 at a time |
+|---|---|---|
+| Orthotics | 2 | **17** |
+| Insoles | 8 | **11** |
+| Socks | 7 | **9** |
+
+Nothing errors — it just looks like a small catalogue.
+
+### Self-healing cannot conjure data that was never on the page
+
+The grid lazy-loads images, so `src` stays a placeholder until a card scrolls
+into view — and the production run never scrolls. Two repairs were aimed at
+this and neither could have worked.
+
+The fix was `/products/{handle}.json`, which returns the image list directly.
+Coverage went from **8% → 100%**.
+
+---
+
+## 📁 Structure
+
+```
+backend/          Express API, scrape pipeline, scheduler, alerts
+  src/pipeline.js   scrape → dedupe → enrich → detect → heal
+  src/anomaly.js    degradation detection
+  src/enrich.js     image backfill
+dashboard/        Next.js UI
+telegram-bot/     bot + message builders
+scraper/          collector notes and repair evidence
+```
+
+---
+
+## 🔒 Security
+
+`.env` files are gitignored; `.env.example` holds placeholders only. Collector
+IDs are committed deliberately — they are identifiers, useless without account
+credentials. API keys and bot tokens appear nowhere in the repo.
