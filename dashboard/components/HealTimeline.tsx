@@ -96,18 +96,22 @@ export default function HealTimeline({ events }: { events: HealEvent[] }) {
                   )}
                 </div>
 
-                {/* break-words: raw CLI output can arrive as one long token.
-                    Collapsed to a single line so four heals do not dominate
-                    the top of the page. */}
-                <p
-                  className={`mt-1 break-words text-[13px] leading-relaxed text-[--text-muted] ${
-                    expanded ? '' : 'line-clamp-1'
-                  }`}
-                >
-                  {e.prompt}
+                {/* The outcome, not the instruction. The raw prompt is a
+                    paragraph of detail written for the AI, not for a reader —
+                    it belongs behind the expander. */}
+                <p className="mt-1 break-words text-[13px] leading-relaxed text-[--text]">
+                  {e.detail ?? e.prompt}
                 </p>
 
-                {expanded && <CoverageDiff event={e} />}
+                {expanded && (
+                  <>
+                    <p className="mt-2 rounded-lg border border-[--border] bg-neutral-50 p-2.5 text-[12px] leading-relaxed text-[--text-muted]">
+                      <span className="font-medium text-[--text-faint]">Prompt sent · </span>
+                      {e.prompt}
+                    </p>
+                    <CoverageDiff event={e} />
+                  </>
+                )}
               </li>
             );
           })}
@@ -119,9 +123,7 @@ export default function HealTimeline({ events }: { events: HealEvent[] }) {
           onClick={() => setExpanded((v) => !v)}
           className="mt-4 w-full rounded-lg border border-[--border] py-1.5 text-[12px] text-[--text-muted] transition hover:border-neutral-400 hover:text-[--text]"
         >
-          {expanded
-            ? 'Show less'
-            : `Show all ${events.length} events and field coverage`}
+          {expanded ? 'Show less' : `Show all ${events.length} events, prompts and coverage`}
         </button>
       )}
     </Card>
