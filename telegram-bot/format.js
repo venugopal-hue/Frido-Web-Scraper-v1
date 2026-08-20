@@ -250,16 +250,21 @@ export function buildCategories({ products }) {
 }
 
 export function buildStatus(s) {
-  const icon = {
-    healthy: '🟢',
-    healing: '🟡',
-    awaiting_approval: '🟠',
-    broken: '🔴',
-    running: '🔵',
+  // Same plain-language states the dashboard uses, so the two surfaces do not
+  // describe the same condition differently.
+  const STATES = {
+    healthy: ['🟢', 'Live'],
+    running: ['🔵', 'Updating'],
+    healing: ['🟡', 'Repairing'],
+    awaiting_approval: ['🟠', 'Needs approval'],
+    stale: ['🟡', 'Out of date'],
+    broken: ['🔴', 'Offline'],
+    unknown: ['⚪', 'No data yet'],
   };
+  const [icon, label] = STATES[s.health] ?? STATES.unknown;
 
   const lines = [
-    `${icon[s.health] ?? '⚪'} *Scraper status: ${esc(s.health.replace(/_/g, ' '))}*`,
+    `${icon} *Tracker status: ${esc(label)}*`,
     '',
     `Collector: \`${escCode(s.collector_id)}\``,
   ];

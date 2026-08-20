@@ -3,13 +3,15 @@
 import { Health, Status, timeAgo } from '@/lib/api';
 
 const STATES: Record<Health, { label: string; dot: string; text: string }> = {
-  healthy: { label: 'Healthy', dot: 'bg-emerald-500', text: 'text-emerald-700' },
-  running: { label: 'Scraping', dot: 'bg-blue-500', text: 'text-blue-700' },
-  healing: { label: 'Healing', dot: 'bg-amber-500', text: 'text-amber-700' },
-  awaiting_approval: { label: 'Awaiting approval', dot: 'bg-orange-500', text: 'text-orange-700' },
-  broken: { label: 'Broken', dot: 'bg-rose-500', text: 'text-rose-700' },
-  stale: { label: 'Stale data', dot: 'bg-amber-500', text: 'text-amber-700' },
-  unknown: { label: 'No runs yet', dot: 'bg-neutral-300', text: 'text-neutral-500' },
+  // Plain-language states. "Healthy" reads like a server metric; the person
+  // looking at this wants to know whether the prices are current.
+  healthy: { label: 'Live', dot: 'bg-emerald-500', text: 'text-emerald-700' },
+  running: { label: 'Updating', dot: 'bg-blue-500', text: 'text-blue-700' },
+  healing: { label: 'Repairing', dot: 'bg-amber-500', text: 'text-amber-700' },
+  awaiting_approval: { label: 'Needs approval', dot: 'bg-orange-500', text: 'text-orange-700' },
+  broken: { label: 'Offline', dot: 'bg-rose-500', text: 'text-rose-700' },
+  stale: { label: 'Out of date', dot: 'bg-amber-500', text: 'text-amber-700' },
+  unknown: { label: 'No data yet', dot: 'bg-neutral-300', text: 'text-neutral-500' },
 };
 
 export default function StatusBanner({
