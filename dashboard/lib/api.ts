@@ -103,6 +103,7 @@ export type Health =
   | 'healing'
   | 'awaiting_approval'
   | 'broken'
+  | 'stale'
   | 'running'
   | 'unknown';
 
@@ -118,6 +119,7 @@ export type Status = {
   progress?: Progress | null;
   collector_id: string;
   last_run: Run | null;
+  last_attempt?: Run | null;
   scraping: boolean;
   last_heal: HealEvent | null;
   recent_heals: HealEvent[];

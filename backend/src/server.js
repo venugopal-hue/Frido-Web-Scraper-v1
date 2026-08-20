@@ -6,6 +6,7 @@ import {
   latestProducts,
   recentRuns,
   latestRun,
+  latestSuccessfulRun,
   healEvents,
   activeHeal,
   allCategories,
@@ -108,19 +109,32 @@ app.get('/api/heals', (_req, res) => res.json({ events: healEvents() }));
 /** Single call the dashboard status bar and the bot's /status both read. */
 app.get('/api/status', (_req, res) => {
   const run = latestRun();
+  const lastGood = latestSuccessfulRun();
   const heal = activeHeal();
   const events = healEvents(5);
+
+  // A run interrupted by the machine sleeping is not a broken scraper. If the
+  // last attempt failed but a recent run succeeded, the data is merely stale —
+  // reporting "broken" there sends you hunting for a fault that does not exist.
+  const STALE_AFTER_MS = 24 * 60 * 60 * 1000;
+  const lastGoodAt = lastGood?.finished_at ? Date.parse(lastGood.finished_at) : 0;
+  const haveRecentData = lastGoodAt && Date.now() - lastGoodAt < STALE_AFTER_MS;
+  const interrupted = /interrupted/i.test(run?.error ?? '');
 
   let health = 'unknown';
   if (heal) health = heal.status === 'awaiting_approval' ? 'awaiting_approval' : 'healing';
   else if (inFlight) health = 'running';
   else if (run?.status === 'success') health = 'healthy';
+  else if (run && haveRecentData) health = interrupted ? 'healthy' : 'stale';
   else if (run) health = 'broken';
 
   res.json({
     health,
     collector_id: COLLECTOR_ID,
-    last_run: run ?? null,
+    // The figures people read should come from the last run that produced
+    // data, not from a failed attempt that produced none.
+    last_run: lastGood ?? run ?? null,
+    last_attempt: run ?? null,
     scraping: Boolean(inFlight),
     progress: getProgress(),
     last_heal: events[0] ?? null,

@@ -8,6 +8,7 @@ const STATES: Record<Health, { label: string; dot: string; text: string }> = {
   healing: { label: 'Healing', dot: 'bg-amber-500', text: 'text-amber-700' },
   awaiting_approval: { label: 'Awaiting approval', dot: 'bg-orange-500', text: 'text-orange-700' },
   broken: { label: 'Broken', dot: 'bg-rose-500', text: 'text-rose-700' },
+  stale: { label: 'Stale data', dot: 'bg-amber-500', text: 'text-amber-700' },
   unknown: { label: 'No runs yet', dot: 'bg-neutral-300', text: 'text-neutral-500' },
 };
 
