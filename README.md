@@ -1,286 +1,276 @@
-<div align="center">
+# Frido Web Scraper
 
-# 🛒 Frido Price Tracker
+A production-grade, self-healing web scraper, real-time analytics dashboard, and Telegram alert bot designed to track prices, discounts, stock availability, and hidden multi-pack unit savings across [store.myfrido.com](https://store.myfrido.com).
 
-**A scraper that repairs itself when the site changes.**
-
-Live price, stock and deal tracking across [store.myfrido.com](https://store.myfrido.com) —
-built on Bright Data Scraper Studio, with a web dashboard and a Telegram bot.
-
-**API:** [frido-web-scraper-v1-1.onrender.com](https://frido-web-scraper-v1-1.onrender.com/api/status) ·
-**Bot:** [@Frido_WebScraper_Bot](https://t.me/Frido_WebScraper_Bot)
-
-![Node](https://img.shields.io/badge/Node-22.5%2B-339933?logo=node.js&logoColor=white)
-![Next.js](https://img.shields.io/badge/Next.js-14-000000?logo=next.js&logoColor=white)
-![SQLite](https://img.shields.io/badge/SQLite-node%3Asqlite-003B57?logo=sqlite&logoColor=white)
-![Telegram](https://img.shields.io/badge/Telegram-Bot-26A5E4?logo=telegram&logoColor=white)
-![Bright Data](https://img.shields.io/badge/Bright%20Data-Scraper%20Studio-0F62FE)
-
-</div>
+Powered by **Bright Data Scraper Studio**, **Node.js (node:sqlite)**, **Next.js 14 App Router**, and **Telegram Bot API**.
 
 ---
 
-## 📊 What it tracks
+## Project Description
 
-| | |
-|---|---|
-| 🛍️ Products | **146** across 19 categories |
-| 🖼️ With images | **146** (100%) |
-| 📦 Cheaper in a multi-pack | **34** |
-| 🏷️ Average discount | **44%** |
-| ⛔ Currently sold out | **26** |
-| 💰 Total below MRP | **₹3,18,531** |
+Frido runs frequent promotional campaigns and dynamic discounts across its catalog. Standard scrapers fail on this storefront because the product catalog is rendered client-side and dynamic DOM updates break traditional static CSS selectors.
 
-Refreshed **hourly**, with every run stored so prices can be compared over time.
+**Frido Web Scraper** solves this with an end-to-end self-healing architecture:
+1. **Resilient Extraction**: Leverages Bright Data Scraper Studio collectors capable of automatic AI prompt-driven DOM self-healing when storefront structures shift.
+2. **Schema & Degradation Monitoring**: Detects extraction anomalies, field fill-rate regressions, and stock state transitions.
+3. **Multi-Pack Value Discovery**: Identifies hidden quantity discounts and unit-level savings obscured on collection pages.
+4. **Interactive SaaS Analytics**: Modern light-themed dashboard providing catalog exploration, price history charts, side-by-side product comparisons, category analytics, and run-over-run diff radars.
+5. **Telegram Bot Alerts**: Instant push notifications for subscriber-configured target price thresholds and catalog restocks.
 
 ---
 
-## 🎯 The problem
+## Features
 
-Frido runs near-permanent discount campaigns, so prices and stock move
-constantly — and nothing tells you whether today's "72% off" is actually a good
-price, or when a sold-out item comes back.
+- **Automated Self-Healing Scraper**: Detects selector degradation and applies natural language repair prompts to rewrite extraction logic automatically.
+- **Modern SaaS Web Dashboard**: Premium light-themed analytics dashboard featuring collapsible sidebar navigation, live status pills, KPI metric cards, and responsive layout.
+- **Interactive Price History**: Step-after line charts with historical price points, MRP reference lines, and all-time high/low tracking.
+- **Hidden Pack Pricing**: Calculates exact unit savings for multi-pack bundles that are only revealed on individual product detail pages.
+- **Product Matrix Comparison**: Side-by-side comparison tool for up to 3 items highlighting best price, highest discount, and lowest unit cost.
+- **Run-over-Run Diff Radar**: Immediate visualization of price drops, price hikes, restocks, new additions, and delisted items between scrape passes.
+- **Category Discount Distribution**: Proportional progress analytics showing discount concentration across all catalog categories.
+- **Telegram Bot Integration**: Conversational bot with interactive pagination keyboards, `/watch` target price alerts, and category summaries.
+- **CSV Data Export**: One-click download of the complete tracked catalog snapshot including pack breakdown and historical metrics.
 
-Scraping it is not straightforward either. **The product grid is rendered
-client-side:**
+---
 
+## Technology Stack
+
+- **Frontend**: Next.js 14 (App Router), React 18, TypeScript, Tailwind CSS, Framer Motion, Recharts
+- **Backend & API**: Node.js 22+ (native `node:sqlite`), Express 4, CORS, dotenv, node-cron
+- **Data Storage**: SQLite with Write-Ahead Logging (`WAL` mode)
+- **Scraper Infrastructure**: Bright Data Scraper Studio CLI (`@brightdata/cli`), Bright Data REST API
+- **Bot Platform**: Telegram Bot API (`node-telegram-bot-api`)
+
+---
+
+## Project Structure
+
+```
+Frido-Web-Scraper-v1/
+├── dashboard/                 # Next.js 14 Web Application
+│   ├── app/                   # App Router layout, pages, and global styles
+│   │   ├── globals.css        # Light theme design tokens and component styles
+│   │   ├── layout.tsx         # Root HTML layout & font settings
+│   │   └── page.tsx           # Main dashboard view orchestrator
+│   ├── components/            # UI components (Sidebar, Header, ProductGrid, etc.)
+│   ├── lib/                   # API client, type definitions, and helper functions
+│   └── package.json           # Frontend dependencies and scripts
+│
+├── backend/                   # Express API Server & Pipeline Scheduler
+│   ├── src/
+│   │   ├── server.js          # REST API endpoints & route handlers
+│   │   ├── pipeline.js        # Scrape ingestion, batching, and healing logic
+│   │   ├── db.js              # SQLite schema, queries, and baseline seeder
+│   │   ├── brightdata.js      # Bright Data Scraper Studio integration
+│   │   ├── anomaly.js         # Degradation & fill-rate regression detectors
+│   │   ├── deal-score.js      # Statistical deal classification algorithms
+│   │   ├── enrich.js          # Product image and metadata enrichment
+│   │   ├── scheduler.js       # Hourly cron schedule executor
+│   │   └── jobs/              # Standalone maintenance & scraping scripts
+│   └── package.json           # Backend dependencies and scripts
+│
+├── scraper/                   # Bright Data Scraper Definitions & Heal Logs
+│   ├── collector.md           # Collector schemas, setup instructions, and rules
+│   ├── heal-log.md            # Self-healing audit history and diagnosis notes
+│   └── *.json                 # Collector schemas and sample outputs
+│
+├── telegram-bot/              # Telegram Bot Client
+│   ├── bot.js                 # Telegram bot polling and command handlers
+│   ├── format.js              # Message templates & inline keyboard builders
+│   ├── preview.js             # Local preview script for testing all bot outputs
+│   └── package.json           # Telegram bot dependencies
+│
+└── README.md                  # Project documentation
+```
+
+---
+
+## Installation
+
+Ensure you have **Node.js 22.5.0 or higher** installed.
+
+### 1. Install Frontend Dependencies
 ```bash
-bdata scrape https://store.myfrido.com/collections/tt-pillows --format markdown | grep -c "₹"
-# 1   ← and that one is a promo banner
+cd dashboard
+npm install
 ```
 
-669 lines of navigation and footer. Zero products, zero prices.
-`/collections/*/products.json` — the usual Shopify escape hatch — redirects
-back to HTML.
-
-So a plain fetch gets nothing, and any hand-written CSS selector is one theme
-deploy away from breaking. That is the case for a self-healing scraper.
-
----
-
-## ✨ Features
-
-- 🔧 **Self-healing** — describe what looks wrong in plain English, the scraper
-  rewrites its own extraction logic
-- 🩺 **Degradation detection** — not just "zero rows": coverage regressions,
-  row-count collapse and prices that stop parsing all trigger a repair
-- 📦 **Pack pricing the storefront hides** — a mask listed at ₹349 costs
-  **₹174.80 per unit** in a four-pack
-- 🎯 **Target price alerts** — `/watch cozy pillow below 600` stays silent
-  until it actually drops that low
-- 📈 **Price history** — every run kept, so "is this cheap?" has a real answer
-- 🔀 **What changed** — the diff between the last two runs, on the dashboard
-- ⇄ **Compare** — up to three products side by side, best value marked per row
-- 📊 **Category insights** — where the discounts actually concentrate
-- 📥 **CSV export** — the current snapshot, pack pricing included
-- 🔔 **Alerts** — price drops, restocks and new products, catalogue-wide or for
-  one product you follow
-- 🤖 **Two surfaces, one API** — dashboard and bot cannot drift apart
-
----
-
-## 🏗️ Architecture
-
+### 2. Install Backend Dependencies
+```bash
+cd ../backend
+npm install
 ```
-              Bright Data Scraper Studio
-        c_mt11rkfr1irkjzsb9 · c_mt15pipw2hu94v7ehy
-                          │
-              bdata scraper run / heal / approve
-                          │
-                  backend/src/pipeline.js
-              ┌───────────┴───────────┐
-        rows returned?           nothing returned
-              │                         │
-        dedupe by URL            bdata scraper heal
-              │                         │
-      backfill missing images    re-run & record
-              │                         │
-        check for degradation           │
-              └───────────┬─────────────┘
-                    SQLite (node:sqlite)
-                          │
-                   Express API :4000
-                  ┌───────┴───────┐
-          Next.js dashboard   Telegram bot
+
+### 3. Install Telegram Bot Dependencies
+```bash
+cd ../telegram-bot
+npm install
 ```
 
 ---
 
-## 🚀 Setup
+## Environment Variables
 
-Requires **Node 22.5+** — the backend uses the built-in `node:sqlite`, so
-there is no native build step.
+Each component includes an `.env.example` template with required variable names. **Never commit `.env` files or API secrets to version control.**
 
-### 1 · Bright Data CLI
+### Backend (`backend/.env`)
+| Variable | Description | Default / Example |
+|---|---|---|
+| `PORT` | API server port | `4000` |
+| `DB_PATH` | Relative or absolute path to SQLite database | `../data/scrapeverse.db` |
+| `COLLECTOR_ID` | Bright Data collector ID for products | Provided in `.env.example` |
+| `PACKS_COLLECTOR_ID` | Bright Data collector ID for multi-packs | Provided in `.env.example` |
+| `CATEGORIES_COLLECTOR_ID` | Optional Bright Data category collector | Empty |
+| `BRIGHTDATA_API_KEY` | Optional Bright Data API Key (if not using `bdata login`) | Secret |
+| `ADMIN_TOKEN` | Secret protecting credit-spending endpoints (`/api/refresh`, `/api/heal`) | Secret |
+| `AUTO_HEAL` | Automatically trigger self-healing on failure | `true` |
+| `ENABLE_SCHEDULER` | Enable background cron job | `true` |
+| `CRON_SCHEDULE` | Cron pattern for periodic scraping | `0 * * * *` (hourly) |
+| `SCRAPE_CHUNK_SIZE` | URLs per Bright Data batch | `4` |
+| `SCRAPE_CONCURRENCY` | Concurrent scraping jobs | `3` |
+| `ENRICH` | Backfill missing product images | `true` |
+| `TELEGRAM_BOT_TOKEN` | Bot API token from @BotFather | Secret |
+| `TELEGRAM_ADMIN_CHAT_IDS` | Comma-separated admin Telegram chat IDs | Secret |
+| `API_BASE_URL` | Public or local base URL for API references | `http://localhost:4000` |
 
+### Frontend (`dashboard/.env.local`)
+| Variable | Description | Default / Example |
+|---|---|---|
+| `API_BASE_URL` | Base URL of the backend API | `http://localhost:4000` |
+| `NEXT_PUBLIC_TELEGRAM_BOT` | Telegram bot username (without `@`) | `Frido_WebScraper_Bot` |
+
+### Telegram Bot (`telegram-bot/.env`)
+| Variable | Description | Default / Example |
+|---|---|---|
+| `TELEGRAM_BOT_TOKEN` | Bot API token from @BotFather | Secret |
+| `API_BASE_URL` | Base URL of the backend API | `http://localhost:4000` |
+| `ADMIN_TOKEN` | Admin token matching backend configuration | Secret |
+| `TELEGRAM_ADMIN_CHAT_IDS` | Comma-separated admin Telegram chat IDs | Secret |
+
+---
+
+## Running Locally
+
+You can run the dashboard independently (it defaults to the live deployed API) or start the full local stack.
+
+### 1. Running the Full Stack
+
+**Terminal 1 — Backend API:**
+```bash
+cd backend
+npm start
+```
+*The backend automatically initializes and seeds the SQLite database with catalog baseline records on first run.*
+
+**Terminal 2 — Frontend Dashboard:**
+```bash
+cd dashboard
+npm run dev
+```
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+**Terminal 3 — Telegram Bot (Optional):**
+```bash
+cd telegram-bot
+npm start
+```
+
+---
+
+## Frontend
+
+The dashboard is built with Next.js 14 (App Router) and Tailwind CSS.
+
+### Available Scripts (`dashboard/`)
+- `npm run dev`: Starts local development server on port 3000 with hot reloading.
+- `npm run build`: Generates optimized production build and checks TypeScript types.
+- `npm run start`: Starts production server.
+- `npm run lint`: Runs Next.js ESLint checks.
+
+---
+
+## Backend
+
+The backend is an Express server utilizing native Node.js SQLite (`node:sqlite`) for zero-dependency persistence.
+
+### Available Scripts (`backend/`)
+- `npm start`: Starts the API server on port 4000.
+- `npm run dev`: Starts the API server with `--watch` mode.
+- `npm run scrape`: Executes a full scraping cycle (chunked runs, deduplication, image enrichment, health check).
+- `npm run scrape-packs`: Discovers and records multi-pack pricing variants.
+- `npm run refresh-images`: Re-syncs product catalog photography.
+- `npm run seed-categories`: Discovers all active collection endpoints.
+- `npm run demo-break`: Simulates extraction anomaly to verify automated self-healing.
+- `npm run test-alerts`: Triggers test notification across registered Telegram subscribers.
+- `npm run import-heals`: Imports CLI heal artifacts into database audit timeline.
+
+---
+
+## Scraper
+
+The scraper uses **Bright Data Scraper Studio** collectors to extract client-side rendered Shopify catalog items.
+
+### Authenticating with Bright Data
+Authenticate your local CLI session without exposing credentials in code:
 ```bash
 npx -p @brightdata/cli bdata login
 ```
 
-### 2 · Dashboard
-
+### Manual Trigger & Inspection
 ```bash
-cd dashboard
-npm install && npm run dev
+# Run products collector
+npx -p @brightdata/cli bdata scraper run -c <COLLECTOR_ID> --urls https://store.myfrido.com/collections/tt-pillows
+
+# Trigger self-healing prompt
+npx -p @brightdata/cli bdata scraper heal -c <COLLECTOR_ID> --prompt "Fix price extraction to capture discounted selling price and MRP"
+
+# Approve and persist healed template
+npx -p @brightdata/cli bdata scraper approve <HEAL_ID> --auto-save
 ```
 
-It talks to the deployed API at
-`https://frido-web-scraper-v1-1.onrender.com` out of the box, so there is
-nothing else to start. `/api/*` is proxied server-side, so no CORS setup and no
-API URL in the client bundle.
+---
 
-### 3 · Backend (only to run your own)
+## Telegram Bot
 
-```bash
-cd backend
-npm install
-cp .env.example .env      # collector IDs are pre-filled
-npm start
-npm run scrape            # first data
-```
+The bot allows shoppers to search products, browse deal tiers, and set up instant price drop alerts.
 
-Then point the other two at it with `API_BASE_URL=http://localhost:4000` in
-`dashboard/.env` and `telegram-bot/.env`.
-
-### 4 · Telegram bot
-
-Create a bot with [@BotFather](https://t.me/BotFather), then:
-
+### Testing Bot Outputs Locally
+Test all bot message templates, markdown escaping, and keyboard layouts without a Telegram token:
 ```bash
 cd telegram-bot
-npm install
-cp .env.example .env      # paste TELEGRAM_BOT_TOKEN
-npm start
+npm run preview
 ```
 
-Only ever run one instance — Telegram allows a single poller per token, and a
-second one makes both drop updates with a 409.
-
-Send `/heal` once to learn your chat ID, then add it to
-`TELEGRAM_ADMIN_CHAT_IDS` for the admin commands.
-
-> ⚠️ The **backend** sends alerts, not the bot — put the same token in
-> `backend/.env` too, or broadcasts silently do nothing.
+### Bot User Commands
+- `/deals`: Interactive inline keyboard categorized by discount percentage tiers.
+- `/latest`: Top 20 products with largest monetary savings.
+- `/categories`: Summary of category product counts and lowest starting prices.
+- `/watch <product>`: Subscribes to any price movement on the specified item.
+- `/watch <product> below <price>`: Sets a custom target price threshold.
+- `/watchlist`: Lists all active products monitored by the user.
+- `/unwatch <product>`: Removes product from active alerts.
+- `/subscribe` / `/unsubscribe`: Storewide broadcast alert toggle.
+- `/status`: Live health and update status of the collector.
 
 ---
 
-## 🛠️ Commands
+## Build and Testing
 
+### Validate Frontend Build & TypeScript Types
 ```bash
-npm run scrape           # full catalogue: chunked runs, dedupe, images, health check
-npm run scrape-packs     # multi-pack pricing from product pages
-npm run refresh-images   # re-point every product at the store's first image
-npm run seed-categories  # rediscover collections
-npm run demo-break       # simulated break → auto-heal fires
-npm run test-alerts      # prove the Telegram alert path works, no waiting
-npm run import-heals     # load CLI heal artifacts into the timeline
+cd dashboard
+npm run build
 ```
 
----
-
-## 🤖 Bot commands
-
-| Command | What it does |
-|---|---|
-| `/deals` | Filter by how much is off — tap a range |
-| `/latest` | Biggest savings right now |
-| `/categories` | What each category has, and its cheapest item |
-| `/watch cozy pillow` | Tell me whenever this price changes |
-| `/watch cozy pillow below 600` | Only tell me when it drops under ₹600 |
-| `/watchlist` | What I follow, and how close to my price |
-| `/unwatch cozy pillow` | Stop following it |
-| `/subscribe` · `/unsubscribe` | Alerts for the whole store |
-| `/status` | Is the tracker working, and when did it last update |
-
-Admin only: `/heal <what broke>`, `/approve`, `/refresh`.
-
----
-
-## 🔌 API
-
-| Method | Route | Returns |
-|---|---|---|
-| `GET` | `/api/data` | Latest snapshot, with deal scores and pack pricing |
-| `GET` | `/api/status` | State, last run, last repair, live progress |
-| `GET` | `/api/changes` | Diff between the two most recent runs |
-| `GET` | `/api/heals` | Repair timeline with field coverage |
-| `GET` | `/api/history?url=` | Price points for one product |
-| `GET` | `/api/sparklines` | Bulk price series, one request for the whole grid |
-| `GET` | `/api/watchlist` | Every followed product, with target prices |
-| `GET` | `/api/runs` · `/api/categories` | Run log, discovered collections |
-| `GET` | `/api/export.csv` | Current snapshot as CSV |
-| `POST` | `/api/refresh` | Trigger a scrape |
-| `POST` | `/api/heal` · `/api/heal/approve` | Repair the scraper |
-| `POST`/`DELETE` | `/api/watches` · `/api/subscribers` | Manage alerts |
-
-Write routes honour `ADMIN_TOKEN` via the `x-admin-token` header. **Set it
-before exposing the API** — those routes spend Bright Data credit, and the
-check is skipped when the token is blank.
-
----
-
-## 🧠 Three things worth knowing
-
-Each of these cost real debugging time and none of them announce themselves.
-
-### Approving a repair does not save it
-
-`bdata scraper approve <id>` — the exact command the CLI's own `next_step`
-field tells you to run — approves the fix **without persisting the template**,
-and reports `status: "done"` either way. The next run silently executes the old
-code.
-
-The tell is in `completed_steps`:
-
-```
-approve alone         … step_advance → user_approval
-approve --auto-save   … step_advance → user_approval → save_new_template
+### Validate Telegram Bot Formats
+```bash
+cd telegram-bot
+npm run preview
 ```
 
-Three repairs were lost to this. The pipeline now checks for
-`save_new_template` rather than trusting the status field. Full diagnosis in
-[`scraper/heal-log.md`](scraper/heal-log.md).
-
-### Large batches are silently capped
-
-Passing all 31 collection URLs to one `run --urls` call returns roughly five
-products per collection. Same collector, four URLs at a time:
-
-| Collection | 31 at once | 4 at a time |
-|---|---|---|
-| Orthotics | 2 | **17** |
-| Insoles | 8 | **11** |
-| Socks | 7 | **9** |
-
-Nothing errors — it just looks like a small catalogue.
-
-### Self-healing cannot conjure data that was never on the page
-
-The grid lazy-loads images, so `src` stays a placeholder until a card scrolls
-into view — and the production run never scrolls. Two repairs were aimed at
-this and neither could have worked.
-
-The fix was `/products/{handle}.json`, which returns the image list directly.
-Coverage went from **8% → 100%**.
-
----
-
-## 📁 Structure
-
+### Verify Backend Endpoints
+```bash
+# With backend running:
+curl http://localhost:4000/api/status
+curl http://localhost:4000/api/data
 ```
-backend/          Express API, scrape pipeline, scheduler, alerts
-  src/pipeline.js   scrape → dedupe → enrich → detect → heal
-  src/anomaly.js    degradation detection
-  src/enrich.js     image backfill
-dashboard/        Next.js UI
-telegram-bot/     bot + message builders
-scraper/          collector notes and repair evidence
-```
-
----
-
-## 🔒 Security
-
-`.env` files are gitignored; `.env.example` holds placeholders only. Collector
-IDs are committed deliberately — they are identifiers, useless without account
-credentials. API keys and bot tokens appear nowhere in the repo.

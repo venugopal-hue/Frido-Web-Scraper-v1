@@ -4,13 +4,8 @@ import { motion } from 'framer-motion';
 import { Product, inr, isOutOfStock, DEAL_LABELS } from '@/lib/api';
 import Card from './Card';
 import Sparkline from './Sparkline';
+import { IconChart, IconExternalLink, IconPackage } from './Icons';
 
-/**
- * One product tile. Shared by the Products grid and the Deals view so the two
- * cannot drift apart — they previously rendered the same data two ways.
- *
- * `index` only drives the entry stagger.
- */
 export default function ProductCard({
   product: p,
   series = {},
@@ -27,125 +22,138 @@ export default function ProductCard({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8 }}
+      initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      /* Stagger only across the first screenful — running it over 146 cards
-         would make the last one appear seconds late. */
-      transition={{ duration: 0.25, delay: Math.min(index, 8) * 0.03, ease: 'easeOut' }}
-      className="flex"
+      transition={{ duration: 0.22, delay: Math.min(index, 8) * 0.025, ease: 'easeOut' }}
+      className="flex h-full"
     >
-      <Card interactive className="flex w-full flex-col overflow-hidden">
+      <Card
+        hoverable
+        className="group flex w-full flex-col overflow-hidden border-slate-200/80 bg-white"
+      >
         <button
           onClick={() => onSelect(p)}
-          className="flex flex-1 flex-col text-left"
-          title="View price history"
+          className="flex flex-1 flex-col text-left focus:outline-hidden"
+          title="Click to view price history and pack pricing"
         >
-          {/* White surface, object-contain, no scaling: the product photo is
-              shown exactly as the store serves it. */}
-          <div className="relative aspect-square w-full border-b border-[--border] bg-white">
+          {/* Image Container with White Background */}
+          <div className="relative aspect-4/3 w-full overflow-hidden border-b border-slate-100 bg-white p-4">
             {p.image_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={p.image_url}
                 alt={p.product_name}
                 loading="lazy"
-                className="h-full w-full object-contain"
+                className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-105"
               />
             ) : (
-              <div className="flex h-full items-center justify-center text-[12px] text-[--text-faint]">
-                No image
+              <div className="flex h-full items-center justify-center text-xs text-slate-400">
+                No image available
               </div>
             )}
 
-            {p.discount_percent && p.discount_percent >= 25 ? (
-              <span className="absolute right-2 top-2 rounded-md bg-neutral-900 px-1.5 py-0.5 text-[11px] font-semibold text-white">
+            {/* Discount Badge */}
+            {p.discount_percent && p.discount_percent >= 20 ? (
+              <span className="absolute right-2.5 top-2.5 rounded-md bg-slate-900 px-2 py-0.5 text-[11px] font-semibold text-white shadow-xs">
                 -{Math.round(p.discount_percent)}%
               </span>
             ) : null}
 
+            {/* Stock Status Badge */}
             {out && (
-              <span className="absolute left-2 top-2 rounded bg-white/90 px-2 py-0.5 text-[11px] font-medium text-rose-600 ring-1 ring-rose-200">
+              <span className="absolute left-2.5 top-2.5 rounded-md bg-white/95 px-2 py-0.5 text-[11px] font-semibold text-rose-600 shadow-xs ring-1 ring-rose-200">
                 Sold out
               </span>
             )}
           </div>
 
+          {/* Product Details */}
           <div className="flex flex-1 flex-col p-4">
-            {p.category && <span className="text-[11px] text-[--text-faint]">{p.category}</span>}
-            <h3 className="mt-1 line-clamp-2 text-[13px] font-medium leading-snug">
+            {/* Category */}
+            {p.category && (
+              <span className="text-[11px] font-medium text-slate-400 tracking-wide uppercase">
+                {p.category}
+              </span>
+            )}
+
+            {/* Name */}
+            <h3 className="mt-1 line-clamp-2 text-[13px] font-semibold leading-snug text-slate-800 group-hover:text-indigo-600 transition-colors">
               {p.product_name}
             </h3>
 
+            {/* Pricing Section */}
             <div className="mt-auto pt-3">
-              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                <span className="text-[17px] font-semibold tracking-tight">
-                  {inr(p.current_price)}
-                </span>
+              <div className="flex items-baseline justify-between gap-1">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-lg font-bold tracking-tight text-slate-900 tabular-nums">
+                    {inr(p.current_price)}
+                  </span>
+                  {p.original_price && p.original_price !== p.current_price && (
+                    <span className="text-xs text-slate-400 line-through tabular-nums">
+                      {inr(p.original_price)}
+                    </span>
+                  )}
+                </div>
+
                 {spark && (
-                  <span className="ml-auto self-center">
+                  <div className="shrink-0">
                     <Sparkline values={spark} />
-                  </span>
+                  </div>
                 )}
-                {p.original_price && p.original_price !== p.current_price && (
-                  <span className="text-[13px] text-[--text-faint] line-through">
-                    {inr(p.original_price)}
-                  </span>
-                )}
-                {p.discount_percent ? (
-                  <span className="text-[12px] font-medium text-emerald-700">
-                    {Math.round(p.discount_percent)}% off
-                  </span>
-                ) : null}
               </div>
 
-              {/* Price context beats the MRP badge: a 60% discount means nothing
-                  if the item never sells for less. */}
+              {/* Deal Verdict Callout */}
               {p.deal && p.deal.verdict !== 'unknown' && p.deal.verdict !== 'typical' && (
-                <p
-                  className={`mt-1.5 text-[11px] font-medium ${
-                    p.deal.verdict === 'above_average' ? 'text-rose-600' : 'text-emerald-700'
-                  }`}
-                >
-                  {DEAL_LABELS[p.deal.verdict]}
-                  {p.deal.verdict === 'above_average' && ` · ${p.deal.vs_avg_percent}% over usual`}
-                </p>
+                <div className="mt-2 flex items-center gap-1.5">
+                  <span
+                    className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium ${
+                      p.deal.verdict === 'above_average'
+                        ? 'bg-rose-50 text-rose-700'
+                        : 'bg-emerald-50 text-emerald-700'
+                    }`}
+                  >
+                    <span
+                      className={`h-1.5 w-1.5 rounded-full ${
+                        p.deal.verdict === 'above_average' ? 'bg-rose-500' : 'bg-emerald-500'
+                      }`}
+                    />
+                    {DEAL_LABELS[p.deal.verdict]}
+                    {p.deal.verdict === 'above_average' && ` (${p.deal.vs_avg_percent}% over usual)`}
+                  </span>
+                </div>
               )}
 
+              {/* Best Multi-pack Deal Callout */}
               {p.best_pack && (
-                <p className="mt-1.5 rounded border border-indigo-100 bg-indigo-50 px-2 py-1 text-[11px] text-indigo-800">
-                  📦 {p.best_pack.label}: {inr(p.best_pack.price_per_unit)}/unit —{' '}
-                  <span className="font-semibold">{p.best_pack.unit_saving_percent}% less</span>
-                </p>
+                <div className="mt-2 flex items-center gap-1.5 rounded-lg border border-indigo-100 bg-indigo-50/70 p-2 text-[11px] text-indigo-900">
+                  <IconPackage className="text-indigo-600 shrink-0" size={14} />
+                  <span className="truncate">
+                    <strong className="font-semibold">{p.best_pack.label}:</strong> {inr(p.best_pack.price_per_unit)}/ea ·{' '}
+                    <span className="font-semibold text-indigo-700">Save {p.best_pack.unit_saving_percent}%</span>
+                  </span>
+                </div>
               )}
             </div>
           </div>
         </button>
 
-        {/* Two explicit actions. The card body is clickable too, but an
-            invisible affordance is not an affordance. */}
-        <div className="grid grid-cols-2 border-t border-[--border] text-[12px]">
+        {/* Card Actions Footer */}
+        <div className="grid grid-cols-2 border-t border-slate-100 bg-slate-50/50 text-xs">
           <button
             onClick={() => onSelect(p)}
-            className="flex items-center justify-center gap-1.5 border-r border-[--border] py-2.5 text-[--text-muted] transition hover:bg-neutral-50 hover:text-[--text]"
+            className="flex items-center justify-center gap-1.5 border-r border-slate-100 py-2.5 font-medium text-slate-600 transition hover:bg-slate-100 hover:text-indigo-600"
           >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <path
-                d="M3 17l5-6 4 3 5-7 4 4"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            Price history
+            <IconChart size={13} className="text-slate-400" />
+            <span>Price history</span>
           </button>
           <a
             href={p.product_url ?? '#'}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center justify-center py-2.5 text-[--text-muted] transition hover:bg-neutral-50 hover:text-[--text]"
+            className="flex items-center justify-center gap-1.5 py-2.5 font-medium text-slate-600 transition hover:bg-slate-100 hover:text-indigo-600"
           >
-            View on store ↗
+            <span>Store</span>
+            <IconExternalLink size={12} className="text-slate-400" />
           </a>
         </div>
       </Card>

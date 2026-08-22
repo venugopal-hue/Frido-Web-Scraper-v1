@@ -3,17 +3,8 @@
 import { Product, isOutOfStock } from '@/lib/api';
 import Card from './Card';
 import ProductCard from './ProductCard';
+import { IconPackage, IconTrendingDown, IconTag } from './Icons';
 
-/**
- * The deals worth acting on, grouped by *why* they are a deal.
- *
- * A headline discount is measured against MRP, which barely moves. The two
- * groups above it — a cheaper per-unit pack, or a price below its own recent
- * average — are things the storefront cannot tell you, so they come first.
- *
- * Renders the same tiles as the Products view rather than a condensed list;
- * the same data shown two different ways just makes the page feel inconsistent.
- */
 export default function DealRadar({
   products,
   series = {},
@@ -42,31 +33,37 @@ export default function DealRadar({
   return (
     <div className="space-y-10">
       <Section
-        title="Cheaper per unit in a multi-pack"
-        hint="The listed price is the worst price for these — the store only reveals the pack price on the product page."
-        empty="No multi-pack savings found. Run npm run scrape-packs to refresh."
+        title="Multi-Pack Unit Value Wins"
+        hint="Items where multi-pack bundles significantly lower the per-unit price compared to buying singles."
+        empty="No multi-pack variations discovered yet."
         items={packWins}
         series={series}
         onSelect={onSelect}
+        icon={IconPackage}
+        badgeColor="bg-indigo-50 text-indigo-700"
       />
 
       <Section
-        title="Below their usual price"
-        hint="Measured against what each product has actually sold for recently, not against MRP."
-        empty="No price movement recorded yet — this fills in once prices change between runs."
+        title="Below Historical Average"
+        hint="Prices currently trading below their long-term recorded moving average on Frido."
+        empty="No historical price drops detected yet — this fills as price updates occur across runs."
         items={belowUsual}
         series={series}
         onSelect={onSelect}
+        icon={IconTrendingDown}
+        badgeColor="bg-emerald-50 text-emerald-700"
       />
 
       <Section
-        title="Steepest discounts"
-        hint="Against MRP, which is the number the store advertises."
-        empty="Nothing at 50% or more right now."
+        title="Steepest Storefront Discounts"
+        hint="Catalogue items with 50% or higher discount against official MRP."
+        empty="No items currently at 50% or more discount."
         items={steepest}
         series={series}
         onSelect={onSelect}
         limit={12}
+        icon={IconTag}
+        badgeColor="bg-sky-50 text-sky-700"
       />
     </div>
   );
@@ -80,6 +77,8 @@ function Section({
   series,
   onSelect,
   limit = 8,
+  icon: Icon,
+  badgeColor,
 }: {
   title: string;
   hint: string;
@@ -88,25 +87,43 @@ function Section({
   series: Record<string, number[]>;
   onSelect: (p: Product) => void;
   limit?: number;
+  icon: React.ComponentType<{ className?: string; size?: number }>;
+  badgeColor: string;
 }) {
   const shown = items.slice(0, limit);
 
   return (
-    <section>
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 className="text-[15px] font-semibold">{title}</h2>
-        <span className="text-[12px] text-[--text-faint]">
-          {shown.length < items.length ? `${shown.length} of ${items.length}` : items.length}
+    <section className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-700">
+            <Icon size={16} />
+          </div>
+          <div>
+            <h2 className="text-sm font-bold text-slate-900 sm:text-base">{title}</h2>
+            <p className="text-xs text-slate-500">{hint}</p>
+          </div>
+        </div>
+
+        <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${badgeColor}`}>
+          {shown.length < items.length ? `${shown.length} of ${items.length}` : items.length} Deals
         </span>
       </div>
-      <p className="mt-1 text-[13px] text-[--text-muted]">{hint}</p>
 
       {items.length === 0 ? (
-        <Card className="mt-4 p-8 text-center text-[13px] text-[--text-faint]">{empty}</Card>
+        <Card className="p-8 text-center text-xs text-slate-400 border-dashed">
+          {empty}
+        </Card>
       ) : (
-        <div className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {shown.map((p, i) => (
-            <ProductCard key={p.id} product={p} series={series} index={i} onSelect={onSelect} />
+            <ProductCard
+              key={p.id}
+              product={p}
+              series={series}
+              index={i}
+              onSelect={onSelect}
+            />
           ))}
         </div>
       )}

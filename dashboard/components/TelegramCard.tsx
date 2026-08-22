@@ -1,35 +1,30 @@
 'use client';
 
 import Card from './Card';
+import { IconTelegram, IconExternalLink } from './Icons';
 
-/**
- * The bot's full command list, in plain language.
- *
- * Worth keeping complete rather than a teaser: this is the only place someone
- * on the web can find out what the bot does before opening Telegram.
- */
 const GROUPS: { title: string; items: [string, string][] }[] = [
   {
-    title: 'Browse',
+    title: 'Browse Catalogue',
     items: [
-      ['/deals', 'Filter by how much is off — tap a range'],
-      ['/latest', 'Top 20 products, biggest savings first'],
-      ['/categories', 'What each category has, and its cheapest item'],
+      ['/deals', 'Filter products by percentage off & range'],
+      ['/latest', 'Top 20 products ordered by biggest savings'],
+      ['/categories', 'Summary of category counts & floor prices'],
     ],
   },
   {
-    title: 'Get alerts',
+    title: 'Instant Price Alerts',
     items: [
-      ['/watch cozy pillow', 'Tell me whenever this price changes'],
-      ['/watch cozy pillow below 600', 'Only tell me when it drops under ₹600'],
-      ['/watchlist', 'Everything I follow, and how close to my price'],
-      ['/unwatch cozy pillow', 'Stop following it'],
-      ['/subscribe', 'Alerts for the whole store, not one product'],
+      ['/watch comfy pillow', 'Alert on any price change for this item'],
+      ['/watch comfy pillow below 600', 'Alert only when price drops below ₹600'],
+      ['/watchlist', 'View all tracked items & target progress'],
+      ['/unwatch comfy pillow', 'Remove item from active alert list'],
+      ['/subscribe', 'Receive broadcast alerts for storewide drops'],
     ],
   },
   {
-    title: 'Check',
-    items: [['/status', 'Is the tracker working, and when did it last update']],
+    title: 'Diagnostics',
+    items: [['/status', 'Check live scraper health & last update time']],
   },
 ];
 
@@ -41,23 +36,39 @@ export default function TelegramCard({ username }: { username?: string }) {
   ).replace(/^@/, '');
 
   return (
-    <Card className="p-5">
-      <h2 className="text-[15px] font-semibold">Get this on Telegram</h2>
-      <p className="mt-1 text-[13px] text-[--text-muted]">
-        Same prices as this page, plus alerts when something you want gets cheaper.
-      </p>
+    <Card className="overflow-hidden border-slate-200/80 bg-white p-5">
+      {/* Header */}
+      <div className="flex items-center gap-2.5 pb-4 border-b border-slate-100">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-50 text-sky-500">
+          <IconTelegram size={18} />
+        </div>
+        <div>
+          <h2 className="text-sm font-bold text-slate-900 sm:text-base">
+            Telegram Real-Time Bot
+          </h2>
+          <p className="text-xs text-slate-500">
+            Subscribe for immediate push notifications whenever tracked prices drop.
+          </p>
+        </div>
+      </div>
 
+      {/* Commands Reference List */}
       <div className="mt-4 space-y-4">
         {GROUPS.map((g) => (
           <div key={g.title}>
-            <h3 className="text-[11px] uppercase tracking-wider text-[--text-faint]">{g.title}</h3>
-            <ul className="mt-1.5 space-y-1.5">
+            <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+              {g.title}
+            </h3>
+            <ul className="mt-2 space-y-2">
               {g.items.map(([cmd, desc]) => (
-                <li key={cmd} className="text-[13px]">
-                  <code className="rounded bg-neutral-100 px-1.5 py-0.5 font-mono text-[12px]">
+                <li
+                  key={cmd}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50/50 p-2 text-xs"
+                >
+                  <code className="rounded-md bg-white px-2 py-0.5 font-mono text-[11px] font-semibold text-indigo-600 border border-slate-200 shadow-2xs">
                     {cmd}
                   </code>
-                  <span className="ml-2 text-[--text-muted]">{desc}</span>
+                  <span className="text-slate-600 font-medium">{desc}</span>
                 </li>
               ))}
             </ul>
@@ -65,13 +76,16 @@ export default function TelegramCard({ username }: { username?: string }) {
         ))}
       </div>
 
+      {/* Launch Bot CTA Button */}
       <a
         href={`https://t.me/${handle}`}
         target="_blank"
         rel="noopener noreferrer"
-        className="mt-5 block rounded-lg border border-[--border] py-2 text-center text-[13px] font-medium transition hover:border-neutral-400 hover:bg-neutral-50"
+        className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg bg-sky-500 px-4 py-2.5 text-xs font-semibold text-white shadow-xs transition hover:bg-sky-600 active:bg-sky-700"
       >
-        Open @{handle}
+        <IconTelegram size={16} />
+        <span>Open @{handle} in Telegram</span>
+        <IconExternalLink size={13} className="text-sky-100" />
       </a>
     </Card>
   );

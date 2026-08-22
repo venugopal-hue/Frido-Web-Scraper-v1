@@ -1,15 +1,16 @@
 'use client';
 
+import React from 'react';
 import { Changes, Product, inr, timeAgo } from '@/lib/api';
 import Card from './Card';
+import {
+  IconTrendingDown,
+  IconTrendingUp,
+  IconPackage,
+  IconAlertTriangle,
+  IconExternalLink,
+} from './Icons';
 
-/**
- * What moved between the two most recent runs.
- *
- * The pipeline computes this on every run to decide what to push to Telegram,
- * but the result was previously discarded — the web side never showed it. This
- * is the same diff, rendered.
- */
 export default function ChangesView({
   changes,
   products,
@@ -27,10 +28,11 @@ export default function ChangesView({
 
   if (!changes?.diff) {
     return (
-      <Card className="p-8 text-center">
-        <p className="text-[14px] font-medium">Nothing to compare yet</p>
-        <p className="mx-auto mt-2 max-w-md text-[13px] text-[--text-muted]">
-          {changes?.reason ?? 'Two completed runs are needed before changes can be shown.'}
+      <Card className="p-8 text-center border-slate-200/80 bg-white">
+        <p className="text-sm font-semibold text-slate-800">No Run Diff Available</p>
+        <p className="mx-auto mt-1 max-w-md text-xs text-slate-500">
+          {changes?.reason ??
+            'At least two completed scraper passes are required to compute run-over-run diffs.'}
         </p>
       </Card>
     );
@@ -44,115 +46,162 @@ export default function ChangesView({
     diff.wentOutOfStock.length;
 
   return (
-    <Card className="p-5">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-[15px] font-semibold">What changed</h2>
-        <span className="text-[12px] text-[--text-faint]">
-          run #{from?.id} → #{to?.id} · {timeAgo(to?.finished_at ?? null)}
-        </span>
-      </div>
-      <p className="mt-1 text-[13px] text-[--text-muted]">
-        Compared against the previous completed run. This is exactly what the Telegram alerts are
-        built from.
-      </p>
-
-      {total === 0 ? (
-        <div className="mt-4 rounded-lg border border-dashed border-[--border] p-6 text-center">
-          <p className="text-[13px] text-[--text-muted]">No changes between these two runs</p>
-          <p className="mt-1 text-[12px] text-[--text-faint]">
-            Every price, stock state and product was identical. Alerts stay silent when nothing
-            moved rather than inventing something to report.
-          </p>
-        </div>
-      ) : (
-        <div className="mt-4 space-y-4">
-          <Group
-            title="Price changes"
-            tone="text-[--text]"
-            items={diff.priceChanges.map((c) => ({
-              key: c.product_url,
-              name: c.product_name,
-              detail: (
-                <>
-                  <span className={c.direction === 'drop' ? 'text-emerald-700' : 'text-rose-600'}>
-                    {c.direction === 'drop' ? '↓' : '↑'} {inr(c.from)} → {inr(c.to)}
-                  </span>
-                </>
-              ),
-              url: c.product_url,
-            }))}
-            onOpen={open}
-          />
-          <Group
-            title="Back in stock"
-            tone="text-emerald-700"
-            items={diff.backInStock.map((p) => ({
-              key: p.product_url ?? p.product_name,
-              name: p.product_name,
-              detail: inr(p.current_price),
-              url: p.product_url,
-            }))}
-            onOpen={open}
-          />
-          <Group
-            title="Just sold out"
-            tone="text-rose-600"
-            items={diff.wentOutOfStock.map((p) => ({
-              key: p.product_url ?? p.product_name,
-              name: p.product_name,
-              detail: inr(p.current_price),
-              url: p.product_url,
-            }))}
-            onOpen={open}
-          />
-          <Group
-            title="New products"
-            tone="text-[--text]"
-            items={diff.newItems.map((p) => ({
-              key: p.product_url ?? p.product_name,
-              name: p.product_name,
-              detail: inr(p.current_price),
-              url: p.product_url,
-            }))}
-            onOpen={open}
-          />
-          {diff.removed.length > 0 && (
-            <p className="text-[12px] text-[--text-faint]">
-              {diff.removed.length} product{diff.removed.length === 1 ? '' : 's'} no longer listed.
+    <Card className="overflow-hidden border-slate-200/80 bg-white">
+      {/* Header */}
+      <div className="border-b border-slate-100 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-bold text-slate-900 sm:text-base">
+              Run-over-Run Diff Radar
+            </h2>
+            <p className="text-xs text-slate-500">
+              Inventory and price changes detected between the two most recent collector passes.
             </p>
-          )}
+          </div>
+
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-mono font-medium text-slate-600">
+            #{from?.id ?? '—'} → #{to?.id ?? '—'} · {timeAgo(to?.finished_at ?? null)}
+          </span>
         </div>
-      )}
+      </div>
+
+      {/* Content */}
+      <div className="p-5">
+        {total === 0 ? (
+          <div className="rounded-xl border border-dashed border-slate-200 p-8 text-center">
+            <p className="text-xs font-semibold text-slate-700">Zero Inventory Drift</p>
+            <p className="mt-1 text-xs text-slate-400">
+              Every single price, SKU, and stock availability state was identical between runs #{from?.id} and #{to?.id}.
+            </p>
+          </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {/* Price Changes */}
+            {diff.priceChanges.length > 0 && (
+              <Group
+                title="Price Adjustments"
+                count={diff.priceChanges.length}
+                icon={IconTrendingDown}
+                badgeColor="bg-indigo-50 text-indigo-700"
+                items={diff.priceChanges.map((c) => ({
+                  key: c.product_url,
+                  name: c.product_name,
+                  detail: (
+                    <span
+                      className={`inline-flex items-center gap-1 font-semibold ${
+                        c.direction === 'drop' ? 'text-emerald-600' : 'text-rose-600'
+                      }`}
+                    >
+                      {c.direction === 'drop' ? '↓' : '↑'} {inr(c.from)} → {inr(c.to)}
+                    </span>
+                  ),
+                  url: c.product_url,
+                }))}
+                onOpen={open}
+              />
+            )}
+
+            {/* Back in stock */}
+            {diff.backInStock.length > 0 && (
+              <Group
+                title="Restocked / Back in Stock"
+                count={diff.backInStock.length}
+                icon={IconPackage}
+                badgeColor="bg-emerald-50 text-emerald-700"
+                items={diff.backInStock.map((p) => ({
+                  key: p.product_url ?? p.product_name,
+                  name: p.product_name,
+                  detail: <span className="font-semibold text-slate-900">{inr(p.current_price)}</span>,
+                  url: p.product_url,
+                }))}
+                onOpen={open}
+              />
+            )}
+
+            {/* Just Sold Out */}
+            {diff.wentOutOfStock.length > 0 && (
+              <Group
+                title="Newly Sold Out"
+                count={diff.wentOutOfStock.length}
+                icon={IconAlertTriangle}
+                badgeColor="bg-rose-50 text-rose-700"
+                items={diff.wentOutOfStock.map((p) => ({
+                  key: p.product_url ?? p.product_name,
+                  name: p.product_name,
+                  detail: <span className="text-rose-600 font-medium">Out of stock</span>,
+                  url: p.product_url,
+                }))}
+                onOpen={open}
+              />
+            )}
+
+            {/* New Products */}
+            {diff.newItems.length > 0 && (
+              <Group
+                title="New Additions to Catalogue"
+                count={diff.newItems.length}
+                icon={IconPackage}
+                badgeColor="bg-sky-50 text-sky-700"
+                items={diff.newItems.map((p) => ({
+                  key: p.product_url ?? p.product_name,
+                  name: p.product_name,
+                  detail: <span className="font-semibold text-slate-900">{inr(p.current_price)}</span>,
+                  url: p.product_url,
+                }))}
+                onOpen={open}
+              />
+            )}
+          </div>
+        )}
+
+        {diff.removed.length > 0 && (
+          <p className="mt-4 text-center text-xs text-slate-400">
+            {diff.removed.length} item{diff.removed.length === 1 ? '' : 's'} unlisted or delisted from the store catalogue.
+          </p>
+        )}
+      </div>
     </Card>
   );
 }
 
 function Group({
   title,
-  tone,
+  count,
+  icon: Icon,
+  badgeColor,
   items,
   onOpen,
 }: {
   title: string;
-  tone: string;
+  count: number;
+  icon: React.ComponentType<{ className?: string; size?: number }>;
+  badgeColor: string;
   items: { key: string; name: string; detail: React.ReactNode; url?: string | null }[];
   onOpen: (url?: string | null) => void;
 }) {
-  if (!items.length) return null;
-
   return (
-    <div>
-      <h3 className={`text-[13px] font-medium ${tone}`}>
-        {title} <span className="text-[--text-faint]">({items.length})</span>
-      </h3>
-      <ul className="mt-1.5 divide-y divide-[--border] rounded-lg border border-[--border]">
-        {items.slice(0, 10).map((i) => (
+    <div className="rounded-xl border border-slate-200/80 bg-slate-50/40 p-3.5">
+      <div className="flex items-center justify-between pb-2.5">
+        <div className="flex items-center gap-2">
+          <Icon size={14} className="text-slate-600" />
+          <h3 className="text-xs font-bold text-slate-800">{title}</h3>
+        </div>
+        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${badgeColor}`}>
+          {count}
+        </span>
+      </div>
+
+      <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200/60 bg-white">
+        {items.slice(0, 8).map((i) => (
           <li key={i.key}>
             <button
               onClick={() => onOpen(i.url)}
-              className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-[13px] transition hover:bg-neutral-50"
+              className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-xs transition hover:bg-slate-50 focus:outline-hidden"
+              title="Click to view full price chart"
             >
-              <span className="min-w-0 flex-1 truncate">{i.name}</span>
+              <span className="min-w-0 flex-1 truncate font-medium text-slate-700 hover:text-indigo-600">
+                {i.name}
+              </span>
               <span className="shrink-0 tabular-nums">{i.detail}</span>
             </button>
           </li>
