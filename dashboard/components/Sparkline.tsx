@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * A tiny inline price trace.
  *
@@ -6,8 +8,8 @@
  */
 export default function Sparkline({
   values,
-  width = 64,
-  height = 18,
+  width = 68,
+  height = 20,
 }: {
   values: number[];
   width?: number;
@@ -20,17 +22,50 @@ export default function Sparkline({
   if (min === max) return null;
 
   const step = width / (values.length - 1);
-  const y = (v: number) => height - ((v - min) / (max - min)) * (height - 2) - 1;
-  const d = values.map((v, i) => `${i === 0 ? 'M' : 'L'} ${(i * step).toFixed(1)} ${y(v).toFixed(1)}`).join(' ');
+  const y = (v: number) => height - ((v - min) / (max - min)) * (height - 4) - 2;
+  const points = values.map((v, i) => ({ x: i * step, y: y(v) }));
+  const d = points
+    .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`)
+    .join(' ');
 
-  // Down is good on a price chart — the reverse of a stock ticker.
+  // Down is good on a price chart — saving money for shoppers.
   const fell = values[values.length - 1] < values[0];
-  const stroke = fell ? '#059669' : '#e11d48';
+  const stroke = fell ? '#10b981' : '#f43f5e';
+  const fillId = `spark-grad-${fell ? 'drop' : 'rise'}-${Math.random().toString(36).slice(2, 7)}`;
+
+  const areaD = `${d} L ${points[points.length - 1].x.toFixed(1)} ${height} L 0 ${height} Z`;
 
   return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden className="overflow-visible">
-      <path d={d} fill="none" stroke={stroke} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={(values.length - 1) * step} cy={y(values[values.length - 1])} r="1.8" fill={stroke} />
-    </svg>
+    <div className="relative inline-flex items-center" title={`Price movement: ${values.join(' → ')}`}>
+      <svg
+        width={width}
+        height={height}
+        viewBox={`0 0 ${width} ${height}`}
+        aria-hidden
+        className="overflow-visible"
+      >
+        <defs>
+          <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={stroke} stopOpacity="0.2" />
+            <stop offset="100%" stopColor={stroke} stopOpacity="0.0" />
+          </linearGradient>
+        </defs>
+        <path d={areaD} fill={`url(#${fillId})`} />
+        <path
+          d={d}
+          fill="none"
+          stroke={stroke}
+          strokeWidth="1.75"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <circle
+          cx={points[points.length - 1].x}
+          cy={points[points.length - 1].y}
+          r="2.2"
+          fill={stroke}
+        />
+      </svg>
+    </div>
   );
 }

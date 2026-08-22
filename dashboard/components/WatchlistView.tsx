@@ -3,13 +3,8 @@
 import { Product, Watch, inr, isOutOfStock, timeAgo } from '@/lib/api';
 import Card from './Card';
 import Sparkline from './Sparkline';
+import { IconWatchlist, IconTelegram, IconExternalLink } from './Icons';
 
-/**
- * Products someone is following via the Telegram bot.
- *
- * The watchlist lives in the bot (`/watch <name>`), so this view is read-only —
- * it shows what is being tracked and where those prices stand now.
- */
 export default function WatchlistView({
   watches,
   products,
@@ -25,51 +20,79 @@ export default function WatchlistView({
 
   if (!watches.length) {
     return (
-      <Card className="p-10 text-center">
-        <p className="text-[15px] font-medium">Nothing is being watched yet</p>
-        <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-[--text-muted]">
-          Send <code className="rounded bg-neutral-100 px-1.5 py-0.5 font-mono text-[12px]">/watch cozy pillow</code>{' '}
-          to the Telegram bot to follow a product, or{' '}
-          <code className="rounded bg-neutral-100 px-1.5 py-0.5 font-mono text-[12px]">
-            /watch cozy pillow below 600
+      <Card className="flex flex-col items-center justify-center p-12 text-center border-slate-200/80 bg-white">
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
+          <IconWatchlist size={24} />
+        </div>
+        <h3 className="mt-3 text-sm font-semibold text-slate-800">
+          No Active Price Watches
+        </h3>
+        <p className="mx-auto mt-1 max-w-md text-xs text-slate-500 leading-relaxed">
+          Track products directly via the Telegram bot by sending{' '}
+          <code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-indigo-600">
+            /watch &lt;product&gt;
           </code>{' '}
-          to hear about it only when it drops under your price.
+          or set a target drop threshold with{' '}
+          <code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-indigo-600">
+            /watch &lt;product&gt; below 600
+          </code>.
         </p>
       </Card>
     );
   }
 
   return (
-    <Card className="p-5">
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 className="text-[15px] font-semibold">Watched products</h2>
-        <span className="text-[12px] text-[--text-faint]">{watches.length} tracked</span>
-      </div>
-      <p className="mt-1 text-[13px] text-[--text-muted]">
-        Added from Telegram. If you set a price, nothing is sent until it actually drops that
-        low.
-      </p>
+    <Card className="overflow-hidden border-slate-200/80 bg-white">
+      {/* Header */}
+      <div className="border-b border-slate-100 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+              <IconWatchlist size={16} />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-slate-900 sm:text-base">
+                Telegram User Watchlist
+              </h2>
+              <p className="text-xs text-slate-500">
+                Products currently followed by subscribers with configured target price alerts.
+              </p>
+            </div>
+          </div>
 
-      <ul className="mt-4 divide-y divide-[--border]">
+          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+            {watches.length} Tracked Items
+          </span>
+        </div>
+      </div>
+
+      {/* List */}
+      <ul className="divide-y divide-slate-100">
         {watches.map((w) => {
           const p = byUrl.get(w.product_url);
           const points = series[w.product_url];
 
           if (!p) {
             return (
-              <li key={w.product_url} className="py-3 text-[13px]">
-                <span className="font-medium">{w.product_name ?? w.product_url}</span>
-                <span className="ml-2 text-[--text-faint]">no longer in the catalogue</span>
+              <li key={w.product_url} className="flex items-center justify-between p-4 text-xs">
+                <span className="font-semibold text-slate-800">{w.product_name ?? w.product_url}</span>
+                <span className="text-slate-400">Delisted from catalogue</span>
               </li>
             );
           }
 
           const out = isOutOfStock(p.availability);
+          const targetHit =
+            typeof w.target_price === 'number' &&
+            p.current_price !== null &&
+            p.current_price <= w.target_price;
+
           return (
             <li key={w.product_url}>
               <button
                 onClick={() => onSelect(p)}
-                className="flex w-full items-center gap-3 py-3 text-left transition hover:bg-neutral-50"
+                className="flex w-full items-center gap-4 p-4 text-left transition hover:bg-slate-50/70 focus:outline-hidden"
+                title="Click to view full price history chart"
               >
                 {p.image_url && (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -77,41 +100,66 @@ export default function WatchlistView({
                     src={p.image_url}
                     alt=""
                     loading="lazy"
-                    className="h-11 w-11 shrink-0 rounded border border-[--border] bg-white object-contain"
+                    className="h-12 w-12 shrink-0 rounded-lg border border-slate-200 bg-white object-contain p-1 shadow-2xs"
                   />
                 )}
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[13px] font-medium">{p.product_name}</span>
-                  <span className="block text-[12px] text-[--text-faint]">
-                    following since {timeAgo(w.since)}
-                    {w.watchers > 1 && ` · ${w.watchers} people`}
+
+                <div className="min-w-0 flex-1">
+                  <span className="block truncate text-xs font-bold text-slate-900 hover:text-indigo-600">
+                    {p.product_name}
                   </span>
+
+                  <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                    <span>Followed {timeAgo(w.since)}</span>
+                    {w.watchers > 1 && (
+                      <>
+                        <span>·</span>
+                        <span className="font-medium text-slate-600">{w.watchers} subscribers</span>
+                      </>
+                    )}
+                  </div>
+
                   {typeof w.target_price === 'number' && (
-                    <span
-                      className={`mt-0.5 inline-block text-[12px] ${
-                        p.current_price !== null && p.current_price <= w.target_price
-                          ? 'font-medium text-emerald-700'
-                          : 'text-[--text-muted]'
-                      }`}
-                    >
-                      {p.current_price !== null && p.current_price <= w.target_price
-                        ? `🎯 Now under your ${inr(w.target_price)}`
-                        : `🎯 Waiting for ${inr(w.target_price)}` +
-                          (p.current_price !== null
-                            ? ` · ${inr(p.current_price - w.target_price)} more to drop`
-                            : '')}
-                    </span>
+                    <div className="mt-1.5 flex items-center gap-1.5">
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-semibold ${
+                          targetHit
+                            ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200'
+                            : 'bg-indigo-50 text-indigo-700'
+                        }`}
+                      >
+                        <span>{targetHit ? '🎯 Target Reached:' : '🎯 Target Threshold:'}</span>
+                        <span>{inr(w.target_price)}</span>
+                        {!targetHit && p.current_price !== null && (
+                          <span className="text-slate-400 font-normal">
+                            ({inr(p.current_price - w.target_price)} to drop)
+                          </span>
+                        )}
+                      </span>
+                    </div>
                   )}
-                </span>
+                </div>
 
-                {points && <Sparkline values={points} />}
+                {points && (
+                  <div className="hidden sm:block shrink-0 px-2">
+                    <Sparkline values={points} />
+                  </div>
+                )}
 
-                <span className="shrink-0 text-right">
-                  <span className="block text-[14px] font-semibold tabular-nums">
+                <div className="shrink-0 text-right">
+                  <span className="block text-sm font-bold text-slate-900 tabular-nums">
                     {inr(p.current_price)}
                   </span>
-                  {out && <span className="block text-[11px] text-rose-600">Sold out</span>}
-                </span>
+                  {out ? (
+                    <span className="mt-0.5 block text-[10px] font-semibold text-rose-600">
+                      Sold out
+                    </span>
+                  ) : (
+                    <span className="mt-0.5 block text-[10px] font-semibold text-emerald-600">
+                      In stock
+                    </span>
+                  )}
+                </div>
               </button>
             </li>
           );

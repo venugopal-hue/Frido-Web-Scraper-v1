@@ -17,13 +17,14 @@ import {
   Changes,
   triggerRefresh,
 } from '@/lib/api';
-import StatusBanner from '@/components/StatusBanner';
+import Sidebar from '@/components/Sidebar';
+import Header from '@/components/Header';
 import StatsRow from '@/components/StatsRow';
 import ProductGrid from '@/components/ProductGrid';
 import HealTimeline from '@/components/HealTimeline';
 import TelegramCard from '@/components/TelegramCard';
 import PriceHistoryModal from '@/components/PriceHistoryModal';
-import Tabs, { ViewId } from '@/components/Tabs';
+import { ViewId } from '@/components/Tabs';
 import DealRadar from '@/components/DealRadar';
 import WatchlistView from '@/components/WatchlistView';
 import HealthView from '@/components/HealthView';
@@ -31,9 +32,11 @@ import PipelineView from '@/components/PipelineView';
 import CategoryInsights from '@/components/CategoryInsights';
 import CompareView from '@/components/CompareView';
 import ChangesView from '@/components/ChangesView';
+import { IconCheck, IconAlertTriangle } from '@/components/Icons';
 
 export default function Page() {
   const [view, setView] = useState<ViewId>('overview');
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const [status, setStatus] = useState<Status | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
@@ -46,28 +49,23 @@ export default function Page() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selected, setSelected] = useState<Product | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type?: 'info' | 'success' | 'error' } | null>(
+    null
+  );
   const [lastRunId, setLastRunId] = useState<number | null>(null);
 
   /**
    * Cheap, frequently-polled state: run status and the watchlist.
-   *
-   * The watchlist is edited from Telegram, so the page has no way of knowing
-   * it changed — an /unwatch used to sit there until a manual reload.
    */
   const loadLight = useCallback(async () => {
     try {
-      // Runs belong here, not in the heavy loader: the heavy one only fires
-      // when the run id changes, and `last_run` is the last *successful* run —
-      // so an in-progress or failed run never triggered it and the activity
-      // list sat stale until something succeeded.
       const [s, w, r] = await Promise.all([getStatus(), getWatchlist(), getRuns()]);
       setStatus(s);
       setWatches(w.watches);
       setRuns(r.runs);
       return s;
     } catch {
-      setToast('Could not reach the tracker API. Retrying shortly…');
+      setToast({ message: 'Could not reach the tracker API. Retrying shortly…', type: 'error' });
       return null;
     }
   }, []);
@@ -97,8 +95,6 @@ export default function Page() {
     loadHeavy();
   }, [loadLight, loadHeavy]);
 
-  // Refetch the catalogue only when the run id moves, rather than on every
-  // poll — the products payload is far larger than the status one.
   useEffect(() => {
     const id = status?.last_run?.id ?? null;
     if (id === null || id === lastRunId) return;
@@ -106,9 +102,6 @@ export default function Page() {
     if (lastRunId !== null) loadHeavy();
   }, [status, lastRunId, loadHeavy]);
 
-  // Poll fast while a run is in flight, slowly otherwise. Without the idle
-  // poll, anything changed elsewhere (a /watch from the bot, a scheduled run)
-  // stayed invisible until a manual reload.
   useEffect(() => {
     const busy =
       status?.scraping || status?.health === 'healing' || status?.health === 'running';
@@ -117,7 +110,6 @@ export default function Page() {
     return () => clearInterval(t);
   }, [status, loadLight]);
 
-  // Coming back to the tab should show current data immediately.
   useEffect(() => {
     const onVisible = () => {
       if (document.visibilityState === 'visible') loadLight();
@@ -138,12 +130,15 @@ export default function Page() {
 
   async function onRefresh() {
     setRefreshing(true);
-    setToast('Scrape started — a full pass takes a few minutes.');
+    setToast({
+      message: 'Scrape started — extracting live store data & photos.',
+      type: 'info',
+    });
     try {
       await triggerRefresh();
       await loadLight();
     } catch {
-      setToast('Could not start the scrape.');
+      setToast({ message: 'Could not start the scrape run.', type: 'error' });
     } finally {
       setRefreshing(false);
     }
@@ -154,80 +149,123 @@ export default function Page() {
   ).length;
 
   return (
-    <main className="mx-auto max-w-[1560px] px-4 py-8 md:px-8 md:py-10">
-      <div className="space-y-6">
-        <StatusBanner status={status} onRefresh={onRefresh} refreshing={refreshing} />
+    <div className="min-h-screen bg-slate-50/60 flex">
+      {/* Sidebar Navigation */}
+      <Sidebar
+        active={view}
+        onChange={setView}
+        counts={{ products: products.length, deals: dealCount, watchlist: watches.length }}
+        status={status}
+        mobileOpen={mobileOpen}
+        onCloseMobile={() => setMobileOpen(false)}
+      />
 
-        <Tabs
-          active={view}
-          onChange={setView}
-          counts={{ products: products.length, deals: dealCount, watchlist: watches.length }}
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col min-w-0 lg:pl-64">
+        {/* Top Header Bar */}
+        <Header
+          view={view}
+          status={status}
+          onRefresh={onRefresh}
+          refreshing={refreshing}
+          onOpenMobile={() => setMobileOpen(true)}
         />
 
-        {view === 'overview' && (
+        {/* Dynamic Page Views */}
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-[1600px] w-full mx-auto">
           <div className="space-y-6">
-            <StatsRow products={products} />
-            <PipelineView status={status} />
-            <ChangesView changes={changes} products={products} onSelect={setSelected} />
-            <CategoryInsights products={products} />
-            {/* min-w-0: grid items refuse to shrink below their content, so one
-                long unbreakable string would otherwise widen the column. */}
-            <div className="grid min-w-0 gap-6 lg:grid-cols-[1.5fr_1fr]">
-              <div className="min-w-0">
-                <HealTimeline events={heals} />
+            {view === 'overview' && (
+              <div className="space-y-6 animate-in fade-in duration-200">
+                <StatsRow products={products} />
+                <PipelineView status={status} />
+                <ChangesView changes={changes} products={products} onSelect={setSelected} />
+                <CategoryInsights products={products} />
+
+                <div className="grid min-w-0 gap-6 lg:grid-cols-[1.5fr_1fr]">
+                  <div className="min-w-0">
+                    <HealTimeline events={heals} />
+                  </div>
+                  <div className="min-w-0">
+                    <TelegramCard />
+                  </div>
+                </div>
+
+                <DealRadar products={products} series={series} onSelect={setSelected} />
               </div>
-              <div className="min-w-0">
-                <TelegramCard />
+            )}
+
+            {view === 'products' && (
+              <div className="animate-in fade-in duration-200">
+                <ProductGrid
+                  products={products}
+                  loading={loading}
+                  series={series}
+                  onSelect={setSelected}
+                />
               </div>
-            </div>
-            <DealRadar products={products} series={series} onSelect={setSelected} />
+            )}
+
+            {view === 'deals' && (
+              <div className="animate-in fade-in duration-200">
+                <DealRadar products={products} series={series} onSelect={setSelected} />
+              </div>
+            )}
+
+            {view === 'compare' && (
+              <div className="animate-in fade-in duration-200">
+                <CompareView products={products} series={series} onSelect={setSelected} />
+              </div>
+            )}
+
+            {view === 'watchlist' && (
+              <div className="animate-in fade-in duration-200">
+                <WatchlistView
+                  watches={watches}
+                  products={products}
+                  series={series}
+                  onSelect={setSelected}
+                />
+              </div>
+            )}
+
+            {view === 'health' && (
+              <div className="animate-in fade-in duration-200">
+                <HealthView status={status} heals={heals} runs={runs} />
+              </div>
+            )}
+
+            {/* Footer */}
+            <footer className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-t border-slate-200/80 pt-6 text-xs text-slate-400">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-slate-600">Frido Web Scraper</span>
+                <span>·</span>
+                <span>© {new Date().getFullYear()} Impact Makers</span>
+              </div>
+              <p>
+                Powered by Bright Data Scraper Studio Collector & Self-Healing AI
+              </p>
+            </footer>
           </div>
-        )}
-
-        {view === 'products' && (
-          <ProductGrid
-            products={products}
-            loading={loading}
-            series={series}
-            onSelect={setSelected}
-          />
-        )}
-
-        {view === 'deals' && <DealRadar products={products} series={series} onSelect={setSelected} />}
-
-        {view === 'compare' && (
-          <CompareView products={products} series={series} onSelect={setSelected} />
-        )}
-
-        {view === 'watchlist' && (
-          <WatchlistView
-            watches={watches}
-            products={products}
-            series={series}
-            onSelect={setSelected}
-          />
-        )}
-
-        {view === 'health' && <HealthView status={status} heals={heals} runs={runs} />}
-
-        <footer className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-t border-[--border] pt-6 text-[12px] text-[--text-faint]">
-          <span>© {new Date().getFullYear()} Impact Makers</span>
-          <span>
-            Built for everyday shoppers who hate overpaying · Powered by Bright Data Scraper Studio
-          </span>
-        </footer>
+        </main>
       </div>
 
+      {/* Price History & Multi-pack Modal */}
       <PriceHistoryModal product={selected} onClose={() => setSelected(null)} />
 
+      {/* Floating Toast Notification */}
       {toast && (
         <div
           role="status"
-          className="card fixed bottom-6 left-1/2 z-50 -translate-x-1/2 px-4 py-2.5 text-[13px] shadow-sm"
+          className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-xl border border-slate-200/90 bg-white/95 px-4 py-2.5 text-xs font-medium text-slate-800 shadow-xl backdrop-blur-md animate-in slide-in-from-bottom-3 duration-200"
         >
-          {toast}
+          {toast.type === 'error' ? (
+            <IconAlertTriangle className="text-rose-500 shrink-0" size={16} />
+          ) : (
+            <IconCheck className="text-emerald-500 shrink-0" size={16} />
+          )}
+          <span>{toast.message}</span>
         </div>
       )}
-    </main>
+    </div>
   );
 }
