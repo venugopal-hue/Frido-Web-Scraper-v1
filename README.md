@@ -7,7 +7,7 @@
 Live price, stock and deal tracking across [store.myfrido.com](https://store.myfrido.com) —
 built on Bright Data Scraper Studio, with a web dashboard and a Telegram bot.
 
-**API:** [frido-web-scraper-v1.onrender.com](https://frido-web-scraper-v1.onrender.com/api/status) ·
+**API:** [frido-web-scraper-v1-1.onrender.com](https://frido-web-scraper-v1-1.onrender.com/api/status) ·
 **Bot:** [@Frido_WebScraper_Bot](https://t.me/Frido_WebScraper_Bot)
 
 ![Node](https://img.shields.io/badge/Node-22.5%2B-339933?logo=node.js&logoColor=white)
@@ -125,7 +125,7 @@ npm install && npm run dev
 ```
 
 It talks to the deployed API at
-`https://frido-web-scraper-v1.onrender.com` out of the box, so there is
+`https://frido-web-scraper-v1-1.onrender.com` out of the box, so there is
 nothing else to start. `/api/*` is proxied server-side, so no CORS setup and no
 API URL in the client bundle.
 

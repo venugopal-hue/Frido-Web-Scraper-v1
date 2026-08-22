@@ -26,7 +26,7 @@ import {
 } from './format.js';
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const API = (process.env.API_BASE_URL ?? 'https://frido-web-scraper-v1.onrender.com').replace(/\/$/, '');
+const API = (process.env.API_BASE_URL ?? 'https://frido-web-scraper-v1-1.onrender.com').replace(/\/$/, '');
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN ?? '';
 const ADMIN_CHATS = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '')
   .split(',')
