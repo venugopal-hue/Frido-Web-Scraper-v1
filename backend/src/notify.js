@@ -66,8 +66,12 @@ const esc = (s) => String(s ?? '').replace(/([_*[\]`])/g, '\\$1');
  * Alert only the chats watching a specific product.
  *
  * Distinct from the broadcast above: a subscriber gets catalogue-wide news,
- * whereas a watcher asked about one item and should hear about it even when
- * the change is too small to make the general digest.
+ * whereas a watcher asked about one item.
+ *
+ * A watcher with a target price hears nothing until the price actually reaches
+ * it — the whole point of setting one is to stop being told about every ₹50
+ * wobble. Crossing the target is reported as its own event rather than as a
+ * generic price change.
  */
 export async function notifyWatchers(diff) {
   if (!TOKEN) {
@@ -80,18 +84,31 @@ export async function notifyWatchers(diff) {
 
   // chat_id -> lines, so a chat watching three changed products gets one message.
   const perChat = new Map();
-  const queue = (url, line) => {
-    for (const chatId of watchers.get(url) ?? []) {
-      if (!perChat.has(chatId)) perChat.set(chatId, []);
-      perChat.get(chatId).push(line);
+  const queue = (url, line, { onlyWithoutTarget = false, priceNow = null } = {}) => {
+    for (const w of watchers.get(url) ?? []) {
+      const hasTarget = typeof w.target === 'number' && Number.isFinite(w.target);
+
+      // Stock news still matters to someone waiting on a price.
+      if (hasTarget && onlyWithoutTarget) continue;
+
+      // A price move that has not reached the target is not worth a message.
+      if (hasTarget && priceNow !== null && priceNow > w.target) continue;
+
+      const text =
+        hasTarget && priceNow !== null && priceNow <= w.target
+          ? `🎯 *Target reached*\n${line}\nYour target was ${inr(w.target)}`
+          : line;
+
+      if (!perChat.has(w.chatId)) perChat.set(w.chatId, []);
+      perChat.get(w.chatId).push(text);
     }
   };
 
   for (const c of diff.priceChanges) {
     queue(
       c.product_url,
-      `${c.direction === 'drop' ? '📉' : '📈'} *${esc(c.product_name)}*\n` +
-        `${inr(c.from)} → ${inr(c.to)}`
+      `${c.direction === 'drop' ? '📉' : '📈'} *${esc(c.product_name)}*\n${inr(c.from)} → ${inr(c.to)}`,
+      { onlyWithoutTarget: false, priceNow: c.to }
     );
   }
   for (const p of diff.backInStock) {

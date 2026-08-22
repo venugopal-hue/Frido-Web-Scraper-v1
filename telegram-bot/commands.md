@@ -4,15 +4,15 @@ Paste the block below into [@BotFather](https://t.me/BotFather) via
 `/setcommands` so the commands autocomplete in chat.
 
 ```
-deals - Filter products by discount range
-latest - Current prices, biggest discounts first
-categories - Item counts and entry prices per category
-watch - Follow one product for price alerts
-watchlist - Products you are following
+deals - Filter by how much is off
+latest - Biggest savings right now
+categories - What each category has
+watch - Follow a product, or set a price
+watchlist - What you follow and how close to your price
 unwatch - Stop following a product
-subscribe - Get alerts on price drops and restocks
+subscribe - Alerts for the whole store
 unsubscribe - Stop alerts
-status - Scraper health and last heal event
+status - Is the tracker working
 ```
 
 `/heal` and `/refresh` are deliberately left out — they are admin-only and
@@ -26,6 +26,7 @@ should not autocomplete for the public.
 | `/latest` | `GET /api/data` | Top 20 by discount, header states the cap |
 | `/deals` | `GET /api/data` | Discount bands as inline buttons; see below |
 | `/watch <name>` | `POST /api/watches` | Follows one product; offers buttons when ambiguous |
+| `/watch <name> below <price>` | `POST /api/watches` | Same, but silent until the price actually drops that low |
 | `/watchlist` | `GET /api/watches/:chatId` | Current prices for everything followed |
 | `/unwatch <name>` | `DELETE /api/watches/:chatId` | Stops following |
 | `/categories` | `GET /api/data` | Per-category item count and entry price |

@@ -76,17 +76,13 @@ body {
   }
 }
 
-::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-::-webkit-scrollbar-thumb {
-  background: #d3d3db;
-  border-radius: 999px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
+/*
+ * No custom scrollbar styling on purpose.
+ *
+ * Touching ::-webkit-scrollbar at all makes Chrome drop its modern slim
+ * scrollbar and render the classic one with arrow buttons instead — visibly
+ * worse than the default it replaces.
+ */
 
 @media (prefers-reduced-motion: reduce) {
   *,

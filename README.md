@@ -7,6 +7,9 @@
 Live price, stock and deal tracking across [store.myfrido.com](https://store.myfrido.com) —
 built on Bright Data Scraper Studio, with a web dashboard and a Telegram bot.
 
+**API:** [frido-web-scraper-v1.onrender.com](https://frido-web-scraper-v1.onrender.com/api/status) ·
+**Bot:** [@Frido_WebScraper_Bot](https://t.me/Frido_WebScraper_Bot)
+
 ![Node](https://img.shields.io/badge/Node-22.5%2B-339933?logo=node.js&logoColor=white)
 ![Next.js](https://img.shields.io/badge/Next.js-14-000000?logo=next.js&logoColor=white)
 ![SQLite](https://img.shields.io/badge/SQLite-node%3Asqlite-003B57?logo=sqlite&logoColor=white)
@@ -21,12 +24,12 @@ built on Bright Data Scraper Studio, with a web dashboard and a Telegram bot.
 
 | | |
 |---|---|
-| 🛍️ Products | **140** across 16 categories |
-| 🖼️ With images | **140** (100%) |
-| 📦 Cheaper in a multi-pack | **33** |
+| 🛍️ Products | **146** across 19 categories |
+| 🖼️ With images | **146** (100%) |
+| 📦 Cheaper in a multi-pack | **34** |
 | 🏷️ Average discount | **44%** |
-| ⛔ Currently sold out | **23** |
-| 💰 Total below MRP | **₹3,10,731** |
+| ⛔ Currently sold out | **26** |
+| 💰 Total below MRP | **₹3,18,531** |
 
 Refreshed **hourly**, with every run stored so prices can be compared over time.
 
@@ -63,7 +66,13 @@ deploy away from breaking. That is the case for a self-healing scraper.
   row-count collapse and prices that stop parsing all trigger a repair
 - 📦 **Pack pricing the storefront hides** — a mask listed at ₹349 costs
   **₹174.80 per unit** in a four-pack
+- 🎯 **Target price alerts** — `/watch cozy pillow below 600` stays silent
+  until it actually drops that low
 - 📈 **Price history** — every run kept, so "is this cheap?" has a real answer
+- 🔀 **What changed** — the diff between the last two runs, on the dashboard
+- ⇄ **Compare** — up to three products side by side, best value marked per row
+- 📊 **Category insights** — where the discounts actually concentrate
+- 📥 **CSV export** — the current snapshot, pack pricing included
 - 🔔 **Alerts** — price drops, restocks and new products, catalogue-wide or for
   one product you follow
 - 🤖 **Two surfaces, one API** — dashboard and bot cannot drift apart
@@ -108,25 +117,30 @@ there is no native build step.
 npx -p @brightdata/cli bdata login
 ```
 
-### 2 · Backend
+### 2 · Dashboard
+
+```bash
+cd dashboard
+npm install && npm run dev
+```
+
+It talks to the deployed API at
+`https://frido-web-scraper-v1.onrender.com` out of the box, so there is
+nothing else to start. `/api/*` is proxied server-side, so no CORS setup and no
+API URL in the client bundle.
+
+### 3 · Backend (only to run your own)
 
 ```bash
 cd backend
 npm install
 cp .env.example .env      # collector IDs are pre-filled
-npm start                 # → http://localhost:4000
+npm start
 npm run scrape            # first data
 ```
 
-### 3 · Dashboard
-
-```bash
-cd dashboard
-npm install && npm run dev    # → http://localhost:3000
-```
-
-`/api/*` proxies to the backend, so there is no CORS setup and no API URL in
-the client bundle.
+Then point the other two at it with `API_BASE_URL=http://localhost:4000` in
+`dashboard/.env` and `telegram-bot/.env`.
 
 ### 4 · Telegram bot
 
@@ -138,6 +152,9 @@ npm install
 cp .env.example .env      # paste TELEGRAM_BOT_TOKEN
 npm start
 ```
+
+Only ever run one instance — Telegram allows a single poller per token, and a
+second one makes both drop updates with a 409.
 
 Send `/heal` once to learn your chat ID, then add it to
 `TELEGRAM_ADMIN_CHAT_IDS` for the admin commands.
@@ -155,6 +172,8 @@ npm run scrape-packs     # multi-pack pricing from product pages
 npm run refresh-images   # re-point every product at the store's first image
 npm run seed-categories  # rediscover collections
 npm run demo-break       # simulated break → auto-heal fires
+npm run test-alerts      # prove the Telegram alert path works, no waiting
+npm run import-heals     # load CLI heal artifacts into the timeline
 ```
 
 ---
@@ -163,13 +182,15 @@ npm run demo-break       # simulated break → auto-heal fires
 
 | Command | What it does |
 |---|---|
-| `/deals` | Discount bands as tap-through buttons, with counts |
-| `/latest` | Top 20 by discount |
-| `/categories` | Item counts and entry prices |
-| `/watch <name>` | Follow one product |
-| `/watchlist` · `/unwatch` | Manage what you follow |
-| `/subscribe` · `/unsubscribe` | Catalogue-wide alerts |
-| `/status` | Tracker state, last run, last repair |
+| `/deals` | Filter by how much is off — tap a range |
+| `/latest` | Biggest savings right now |
+| `/categories` | What each category has, and its cheapest item |
+| `/watch cozy pillow` | Tell me whenever this price changes |
+| `/watch cozy pillow below 600` | Only tell me when it drops under ₹600 |
+| `/watchlist` | What I follow, and how close to my price |
+| `/unwatch cozy pillow` | Stop following it |
+| `/subscribe` · `/unsubscribe` | Alerts for the whole store |
+| `/status` | Is the tracker working, and when did it last update |
 
 Admin only: `/heal <what broke>`, `/approve`, `/refresh`.
 
@@ -180,12 +201,17 @@ Admin only: `/heal <what broke>`, `/approve`, `/refresh`.
 | Method | Route | Returns |
 |---|---|---|
 | `GET` | `/api/data` | Latest snapshot, with deal scores and pack pricing |
-| `GET` | `/api/status` | State, last run, last repair, progress |
+| `GET` | `/api/status` | State, last run, last repair, live progress |
+| `GET` | `/api/changes` | Diff between the two most recent runs |
 | `GET` | `/api/heals` | Repair timeline with field coverage |
 | `GET` | `/api/history?url=` | Price points for one product |
-| `GET` | `/api/runs` | Recent run log |
+| `GET` | `/api/sparklines` | Bulk price series, one request for the whole grid |
+| `GET` | `/api/watchlist` | Every followed product, with target prices |
+| `GET` | `/api/runs` · `/api/categories` | Run log, discovered collections |
+| `GET` | `/api/export.csv` | Current snapshot as CSV |
 | `POST` | `/api/refresh` | Trigger a scrape |
 | `POST` | `/api/heal` · `/api/heal/approve` | Repair the scraper |
+| `POST`/`DELETE` | `/api/watches` · `/api/subscribers` | Manage alerts |
 
 Write routes honour `ADMIN_TOKEN` via the `x-admin-token` header. **Set it
 before exposing the API** — those routes spend Bright Data credit, and the

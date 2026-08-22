@@ -28,23 +28,23 @@ export function buildStart() {
   return [
     '*Frido Price Tracker* 🛏️',
     '',
-    'I track product prices and stock across the Frido store, powered by a',
-    'Bright Data Scraper Studio collector that detects its own breakage and',
-    'calls `bdata scraper heal` to repair itself.',
+    'I check Frido prices every hour and tell you when something you want',
+    'gets cheaper or comes back in stock.',
     '',
     '*Browse*',
-    '/deals — filter by discount range',
-    '/latest — current prices, best discounts first',
-    '/categories — browse by category',
+    '/deals — filter by how much is off',
+    '/latest — biggest savings right now',
+    '/categories — what each category has',
     '',
-    '*Track*',
-    '/watch <name> — follow one product',
-    '/watchlist — what you are following',
-    '/unwatch <name> — stop following',
-    '/subscribe — alerts for the whole catalogue',
+    '*Get alerts*',
+    '`/watch cozy pillow` — tell me when this price changes',
+    '`/watch cozy pillow below 600` — only when it drops under ₹600',
+    '/watchlist — what I follow, and how close to my price',
+    '`/unwatch cozy pillow` — stop following it',
+    '/subscribe — alerts for the whole store',
     '',
-    '*Health*',
-    '/status — scraper health and last heal event',
+    '*Check*',
+    '/status — is the tracker working',
   ].join('\n');
 }
 
@@ -310,12 +310,33 @@ export function buildWatchlist(watches, products) {
   const lines = watches.map((w) => {
     const p = byUrl.get(w.product_url);
     if (!p) return `• ${esc(w.product_name ?? w.product_url)} — _no longer in the catalogue_`;
+
     const stock = isOutOfStock(p.availability) ? ' ⛔' : '';
-    return `• [${esc(p.product_name)}](${p.product_url}) — ${inr(p.current_price)}${stock}${dealTag(p)}${packTag(p)}`;
+    const head = `• [${esc(p.product_name)}](${p.product_url}) — ${inr(p.current_price)}${stock}`;
+
+    // With a target, the gap to it is the only number that matters.
+    const t = w.target_price;
+    if (typeof t === 'number' && Number.isFinite(t)) {
+      const met = p.current_price !== null && p.current_price <= t;
+      const gap = p.current_price !== null ? p.current_price - t : null;
+      return (
+        head +
+        (met
+          ? `
+  🎯 *now under your ${inr(t)}*`
+          : `
+  🎯 waiting for ${inr(t)}${gap ? ` · ${inr(gap)} more to drop` : ''}`)
+      );
+    }
+
+    return head + dealTag(p) + packTag(p);
   });
 
-  return paginate(`*Watching ${watches.length} product${watches.length === 1 ? '' : 's'}*`, lines,
-    '_Remove with_ `/unwatch <name>`_._');
+  return paginate(
+    `*Watching ${watches.length} product${watches.length === 1 ? '' : 's'}*`,
+    lines,
+    '_Want a price alert? Try_ `/watch cozy pillow below 600`'
+  );
 }
 
 /** Fuzzy product lookup for /watch — returns the best matches by name. */

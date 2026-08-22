@@ -19,7 +19,7 @@ import {
 // exactly what subscribers receive, not a copy that can drift.
 import { formatDiff } from '../backend/src/format-alert.js';
 
-const API = (process.env.API_BASE_URL ?? 'http://localhost:4000').replace(/\/$/, '');
+const API = (process.env.API_BASE_URL ?? 'https://frido-web-scraper-v1.onrender.com').replace(/\/$/, '');
 
 async function get(path) {
   const res = await fetch(`${API}${path}`);

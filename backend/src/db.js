@@ -99,6 +99,8 @@ CREATE TABLE IF NOT EXISTS watches (
   chat_id     TEXT NOT NULL,
   product_url TEXT NOT NULL,
   product_name TEXT,
+  -- Optional: only alert once the price reaches or drops below this.
+  target_price REAL,
   created_at  TEXT NOT NULL,
   PRIMARY KEY (chat_id, product_url)
 );
@@ -165,6 +167,13 @@ export function finishRun(runId, { status, itemCount = 0, error = null }) {
   ).run(status, itemCount, error, nowIso(), runId);
 }
 
+/** The last N successful runs, newest first — used to diff one against another. */
+export function recentSuccessfulRuns(limit = 2) {
+  return db
+    .prepare(`SELECT * FROM runs WHERE status = 'success' ORDER BY id DESC LIMIT ?`)
+    .all(limit);
+}
+
 export function latestSuccessfulRun() {
   return db
     .prepare(`SELECT * FROM runs WHERE status = 'success' ORDER BY id DESC LIMIT 1`)
@@ -184,6 +193,25 @@ export function recentRuns(limit = 20) {
  * a crash or restart mid-scrape strands the row forever and makes /api/status
  * report a scrape that is not happening. Called on boot to clear those.
  */
+/**
+ * Is a scrape already in flight?
+ *
+ * The in-process `inFlight` guard only covers POST /api/refresh. The scheduler
+ * calls the pipeline directly, and `npm run scrape` is a separate process
+ * entirely, so neither could see the other — two runs overlapped, double-
+ * spending credit and writing concurrently. The runs table is the one thing
+ * all three share, so the lock lives here.
+ *
+ * A run older than the cutoff is treated as dead rather than blocking forever;
+ * a full pass takes ~9 minutes, so 45 is comfortably beyond a slow one.
+ */
+export function activeRun({ staleAfterMinutes = 45 } = {}) {
+  const cutoff = new Date(Date.now() - staleAfterMinutes * 60_000).toISOString();
+  return db
+    .prepare(`SELECT * FROM runs WHERE status = 'running' AND started_at >= ? ORDER BY id DESC LIMIT 1`)
+    .get(cutoff);
+}
+
 export function reapStaleRuns() {
   const { changes } = db
     .prepare(
@@ -419,11 +447,20 @@ export function packCount() {
 
 /* ---------- watches ---------- */
 
-export function addWatch(chatId, productUrl, productName) {
+/**
+ * Follow a product, optionally with a target price.
+ *
+ * Re-watching an existing product updates the target rather than doing
+ * nothing, so `/watch x below 500` works as a way to change your mind.
+ */
+export function addWatch(chatId, productUrl, productName, targetPrice = null) {
   db.prepare(
-    `INSERT INTO watches (chat_id, product_url, product_name, created_at) VALUES (?, ?, ?, ?)
-     ON CONFLICT(chat_id, product_url) DO NOTHING`
-  ).run(String(chatId), productUrl, productName ?? null, nowIso());
+    `INSERT INTO watches (chat_id, product_url, product_name, target_price, created_at)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(chat_id, product_url) DO UPDATE SET
+       target_price = excluded.target_price,
+       product_name = COALESCE(excluded.product_name, watches.product_name)`
+  ).run(String(chatId), productUrl, productName ?? null, targetPrice, nowIso());
 }
 
 export function removeWatch(chatId, productUrl) {
@@ -437,13 +474,63 @@ export function watchesForChat(chatId) {
   return db.prepare(`SELECT * FROM watches WHERE chat_id = ? ORDER BY created_at`).all(String(chatId));
 }
 
-/** Every watch, grouped by product_url — used when broadcasting a diff. */
+/** Every watched product, deduplicated across chats — the dashboard view. */
+export function allWatchedUrls() {
+  return db
+    .prepare(
+      `SELECT product_url,
+              product_name,
+              COUNT(*) AS watchers,
+              MIN(created_at) AS since,
+              -- The most ambitious target anyone set, for display.
+              MIN(target_price) AS target_price
+         FROM watches
+        GROUP BY product_url
+        ORDER BY since`
+    )
+    .all();
+}
+
+/**
+ * Last N price points for every product that has more than one, in one query.
+ *
+ * Fetching these per-card would be one request per product; the grid renders
+ * 140 at a time.
+ */
+export function sparklineData(limitPerProduct = 20) {
+  const rows = db
+    .prepare(
+      `SELECT product_url, current_price, scraped_at
+         FROM products
+        WHERE product_url IS NOT NULL AND current_price IS NOT NULL
+        ORDER BY product_url, id`
+    )
+    .all();
+
+  const map = {};
+  for (const r of rows) {
+    (map[r.product_url] ??= []).push(r.current_price);
+  }
+  // Only series with actual movement are worth drawing.
+  for (const [url, prices] of Object.entries(map)) {
+    const trimmed = prices.slice(-limitPerProduct);
+    if (trimmed.length < 2 || new Set(trimmed).size < 2) delete map[url];
+    else map[url] = trimmed;
+  }
+  return map;
+}
+
+/**
+ * Every watch, grouped by product_url — used when broadcasting a diff.
+ * Each entry carries the chat's own target, since two people can watch the
+ * same product at different prices.
+ */
 export function watchersByUrl() {
-  const rows = db.prepare(`SELECT chat_id, product_url FROM watches`).all();
+  const rows = db.prepare(`SELECT chat_id, product_url, target_price FROM watches`).all();
   const map = new Map();
   for (const r of rows) {
     if (!map.has(r.product_url)) map.set(r.product_url, []);
-    map.get(r.product_url).push(r.chat_id);
+    map.get(r.product_url).push({ chatId: r.chat_id, target: r.target_price });
   }
   return map;
 }

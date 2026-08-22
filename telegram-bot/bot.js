@@ -26,7 +26,7 @@ import {
 } from './format.js';
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const API = (process.env.API_BASE_URL ?? 'http://localhost:4000').replace(/\/$/, '');
+const API = (process.env.API_BASE_URL ?? 'https://frido-web-scraper-v1.onrender.com').replace(/\/$/, '');
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN ?? '';
 const ADMIN_CHATS = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '')
   .split(',')
@@ -144,12 +144,18 @@ bot.onText(
 bot.on('callback_query', async (q) => {
   const [prefix, bandId, pageRaw] = String(q.data ?? '').split(':');
 
-  // Disambiguation buttons from /watch carry a product id.
+  // Disambiguation buttons from /watch carry a product id and, in the third
+  // segment, the target price typed alongside the name. Without carrying it
+  // through, picking from the list silently dropped the price the user asked
+  // for.
   if (prefix === 'watch') {
     try {
       const { products } = await api('/api/data');
       const p = products.find((x) => String(x.id) === bandId);
       if (!p) throw new Error('product no longer in the catalogue');
+
+      const parsed = pageRaw ? Number(pageRaw) : NaN;
+      const target = Number.isFinite(parsed) ? parsed : null;
 
       const r = await api('/api/watches', {
         method: 'POST',
@@ -157,17 +163,14 @@ bot.on('callback_query', async (q) => {
           chat_id: q.message.chat.id,
           product_url: p.product_url,
           product_name: p.product_name,
+          target_price: target,
         }),
       });
-      await bot.editMessageText(
-        `👁 Watching *${esc(p.product_name)}* at ${inr(p.current_price)}.\n` +
-          `You now watch ${r.count} product${r.count === 1 ? '' : 's'}.`,
-        {
-          chat_id: q.message.chat.id,
-          message_id: q.message.message_id,
-          parse_mode: 'Markdown',
-        }
-      );
+      await bot.editMessageText(watchConfirmation(p, target, r.count), {
+        chat_id: q.message.chat.id,
+        message_id: q.message.message_id,
+        parse_mode: 'Markdown',
+      });
     } catch (err) {
       console.error('[bot] watch callback failed:', err.message);
     }
@@ -246,16 +249,64 @@ bot.onText(
   })
 );
 
+/**
+ * Confirmation text for a new watch.
+ *
+ * When a target is set it says plainly whether the product is already there —
+ * otherwise someone sets a target above the current price and waits for an
+ * alert that will never come, because nothing has to change.
+ */
+function watchConfirmation(p, target, count) {
+  const tail = `\nYou now watch ${count} product${count === 1 ? '' : 's'}.`;
+
+  if (target === null) {
+    return (
+      `👁 Watching *${esc(p.product_name)}* at ${inr(p.current_price)}.\n` +
+      `Alerts on any price change or restock.${tail}`
+    );
+  }
+
+  if (p.current_price !== null && p.current_price <= target) {
+    return (
+      `🎯 *${esc(p.product_name)}* is already at ${inr(p.current_price)}, ` +
+      `below your ${inr(target)} target.\n` +
+      `Saved anyway — you will hear if it rises and drops back.${tail}`
+    );
+  }
+
+  const gap = p.current_price !== null ? p.current_price - target : null;
+  return (
+    `🎯 Watching *${esc(p.product_name)}*.\n` +
+    `Now ${inr(p.current_price)}, target ${inr(target)}` +
+    (gap ? ` — needs to drop ${inr(gap)}.` : '.') +
+    `\nQuiet until then.${tail}`
+  );
+}
+
 // (?!list) so `/watchlist` does not also fire this handler.
 bot.onText(
   /^\/watch(?!list)(?:\s+([\s\S]+))?/,
   handle(async (msg, match) => {
-    const query = match?.[1]?.trim();
-    if (!query) {
+    const raw = match?.[1]?.trim();
+    if (!raw) {
       return send(
         msg.chat.id,
-        'Usage: `/watch <part of a product name>`\nExample: `/watch cozy pillow`'
+        '*Follow a product*\n\n' +
+          '`/watch cozy pillow`\n' +
+          'Alerts on any price change or restock.\n\n' +
+          '`/watch cozy pillow below 600`\n' +
+          'Stays quiet until it actually drops to ₹600 or less.'
       );
+    }
+
+    // "<name> below 600" / "under 600" / "< 600". The price is optional, and
+    // is stripped off the query so the product lookup is not polluted by it.
+    const targetMatch = raw.match(/\s+(?:below|under|<=?|at)\s*₹?\s*(\d[\d,]*)\s*$/i);
+    const target = targetMatch ? Number(targetMatch[1].replace(/,/g, '')) : null;
+    const query = targetMatch ? raw.slice(0, targetMatch.index).trim() : raw;
+
+    if (!query) {
+      return send(msg.chat.id, 'Which product? Try `/watch cozy pillow below 600`');
     }
 
     const { products } = await api('/api/data');
@@ -266,11 +317,12 @@ bot.onText(
     }
 
     // More than one candidate: let the user pick rather than guessing wrong.
+    // The target rides along in callback_data so the choice keeps it.
     if (matches.length > 1 && matches[0].product_name.toLowerCase() !== query.toLowerCase()) {
       return send(msg.chat.id, `*Which one?*\n\nReply with a more specific name:`, {
         reply_markup: {
           inline_keyboard: matches.map((p) => [
-            { text: p.product_name.slice(0, 60), callback_data: `watch:${p.id}` },
+            { text: p.product_name.slice(0, 60), callback_data: `watch:${p.id}:${target ?? ''}` },
           ]),
         },
       });
@@ -283,13 +335,10 @@ bot.onText(
         chat_id: msg.chat.id,
         product_url: p.product_url,
         product_name: p.product_name,
+        target_price: target,
       }),
     });
-    await send(
-      msg.chat.id,
-      `👁 Watching *${esc(p.product_name)}* at ${inr(p.current_price)}.\n` +
-        `You now watch ${r.count} product${r.count === 1 ? '' : 's'}.`
-    );
+    await send(msg.chat.id, watchConfirmation(p, target, r.count));
   })
 );
 

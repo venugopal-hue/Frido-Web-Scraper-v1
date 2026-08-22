@@ -4,10 +4,17 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   HealEvent,
   Product,
+  Run,
   Status,
+  Watch,
   getData,
   getHeals,
+  getRuns,
+  getSparklines,
   getStatus,
+  getWatchlist,
+  getChanges,
+  Changes,
   triggerRefresh,
 } from '@/lib/api';
 import StatusBanner from '@/components/StatusBanner';
@@ -16,43 +23,112 @@ import ProductGrid from '@/components/ProductGrid';
 import HealTimeline from '@/components/HealTimeline';
 import TelegramCard from '@/components/TelegramCard';
 import PriceHistoryModal from '@/components/PriceHistoryModal';
+import Tabs, { ViewId } from '@/components/Tabs';
+import DealRadar from '@/components/DealRadar';
+import WatchlistView from '@/components/WatchlistView';
+import HealthView from '@/components/HealthView';
+import PipelineView from '@/components/PipelineView';
+import CategoryInsights from '@/components/CategoryInsights';
+import CompareView from '@/components/CompareView';
+import ChangesView from '@/components/ChangesView';
 
 export default function Page() {
+  const [view, setView] = useState<ViewId>('overview');
+
   const [status, setStatus] = useState<Status | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [heals, setHeals] = useState<HealEvent[]>([]);
+  const [runs, setRuns] = useState<Run[]>([]);
+  const [watches, setWatches] = useState<Watch[]>([]);
+  const [series, setSeries] = useState<Record<string, number[]>>({});
+  const [changes, setChanges] = useState<Changes | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selected, setSelected] = useState<Product | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [lastRunId, setLastRunId] = useState<number | null>(null);
 
-  const load = useCallback(async () => {
+  /**
+   * Cheap, frequently-polled state: run status and the watchlist.
+   *
+   * The watchlist is edited from Telegram, so the page has no way of knowing
+   * it changed — an /unwatch used to sit there until a manual reload.
+   */
+  const loadLight = useCallback(async () => {
     try {
-      const [s, d, h] = await Promise.all([getStatus(), getData(), getHeals()]);
+      // Runs belong here, not in the heavy loader: the heavy one only fires
+      // when the run id changes, and `last_run` is the last *successful* run —
+      // so an in-progress or failed run never triggered it and the activity
+      // list sat stale until something succeeded.
+      const [s, w, r] = await Promise.all([getStatus(), getWatchlist(), getRuns()]);
       setStatus(s);
-      setProducts(d.products);
-      setHeals(h.events);
+      setWatches(w.watches);
+      setRuns(r.runs);
       return s;
     } catch {
-      setToast('Could not reach the API — is the backend running on :4000?');
+      setToast('Could not reach the tracker API. Retrying shortly…');
       return null;
+    }
+  }, []);
+
+  /** The expensive half — only refetched when a run actually produced new data. */
+  const loadHeavy = useCallback(async () => {
+    try {
+      const [d, h, sp, c] = await Promise.all([
+        getData(),
+        getHeals(),
+        getSparklines(),
+        getChanges(),
+      ]);
+      setProducts(d.products);
+      setHeals(h.events);
+      setSeries(sp.series);
+      setChanges(c);
+    } catch {
+      /* loadLight surfaces the error; no need to toast twice */
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    loadLight();
+    loadHeavy();
+  }, [loadLight, loadHeavy]);
 
-  // Continuously refresh in realtime (fast polling during scrapes, steady polling when idle)
+  // Refetch the catalogue only when the run id moves, rather than on every
+  // poll — the products payload is far larger than the status one.
   useEffect(() => {
-    const busy = Boolean(
-      status?.scraping || status?.health === 'healing' || status?.health === 'running'
-    );
-    const t = setInterval(load, busy ? 3000 : 12000);
+    const id = status?.last_run?.id ?? null;
+    if (id === null || id === lastRunId) return;
+    setLastRunId(id);
+    if (lastRunId !== null) loadHeavy();
+  }, [status, lastRunId, loadHeavy]);
+
+  // Poll fast while a run is in flight, slowly otherwise. Without the idle
+  // poll, anything changed elsewhere (a /watch from the bot, a scheduled run)
+  // stayed invisible until a manual reload.
+  useEffect(() => {
+    const busy =
+      status?.scraping || status?.health === 'healing' || status?.health === 'running';
+    const every = busy ? 4000 : 15000;
+    const t = setInterval(loadLight, every);
     return () => clearInterval(t);
-  }, [status, load]);
+  }, [status, loadLight]);
+
+  // Coming back to the tab should show current data immediately.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') loadLight();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
+  }, [loadLight]);
 
   useEffect(() => {
     if (!toast) return;
@@ -62,10 +138,10 @@ export default function Page() {
 
   async function onRefresh() {
     setRefreshing(true);
-    setToast('Scrape started — this can take a minute.');
+    setToast('Scrape started — a full pass takes a few minutes.');
     try {
       await triggerRefresh();
-      await load();
+      await loadLight();
     } catch {
       setToast('Could not start the scrape.');
     } finally {
@@ -73,30 +149,66 @@ export default function Page() {
     }
   }
 
+  const dealCount = products.filter(
+    (p) => p.best_pack || ['lowest', 'near_lowest', 'below_average'].includes(p.deal?.verdict ?? '')
+  ).length;
+
   return (
     <main className="mx-auto max-w-[1560px] px-4 py-8 md:px-8 md:py-10">
-      {/* Deliberately not sticky: a floating panel over a scrolling grid was
-          overlapping the cards beneath it. */}
-      <div className="space-y-8">
+      <div className="space-y-6">
         <StatusBanner status={status} onRefresh={onRefresh} refreshing={refreshing} />
 
-        <StatsRow products={products} />
+        <Tabs
+          active={view}
+          onChange={setView}
+          counts={{ products: products.length, deals: dealCount, watchlist: watches.length }}
+        />
 
-        {/* Self-healing is the whole point of the project, so it sits above the
-            catalogue rather than under a few hundred product cards.
-            min-w-0: grid items default to min-width:auto and refuse to shrink
-            below their content, so one long unbreakable string (a heal's raw
-            CLI output) would otherwise blow the column out of the page. */}
-        <div className="grid min-w-0 gap-6 lg:grid-cols-[1.5fr_1fr]">
-          <div className="min-w-0">
-            <HealTimeline events={heals} />
+        {view === 'overview' && (
+          <div className="space-y-6">
+            <StatsRow products={products} />
+            <PipelineView status={status} />
+            <ChangesView changes={changes} products={products} onSelect={setSelected} />
+            <CategoryInsights products={products} />
+            {/* min-w-0: grid items refuse to shrink below their content, so one
+                long unbreakable string would otherwise widen the column. */}
+            <div className="grid min-w-0 gap-6 lg:grid-cols-[1.5fr_1fr]">
+              <div className="min-w-0">
+                <HealTimeline events={heals} />
+              </div>
+              <div className="min-w-0">
+                <TelegramCard />
+              </div>
+            </div>
+            <DealRadar products={products} series={series} onSelect={setSelected} />
           </div>
-          <div className="min-w-0">
-            <TelegramCard />
-          </div>
-        </div>
+        )}
 
-        <ProductGrid products={products} loading={loading} onSelect={setSelected} />
+        {view === 'products' && (
+          <ProductGrid
+            products={products}
+            loading={loading}
+            series={series}
+            onSelect={setSelected}
+          />
+        )}
+
+        {view === 'deals' && <DealRadar products={products} series={series} onSelect={setSelected} />}
+
+        {view === 'compare' && (
+          <CompareView products={products} series={series} onSelect={setSelected} />
+        )}
+
+        {view === 'watchlist' && (
+          <WatchlistView
+            watches={watches}
+            products={products}
+            series={series}
+            onSelect={setSelected}
+          />
+        )}
+
+        {view === 'health' && <HealthView status={status} heals={heals} runs={runs} />}
 
         <footer className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-t border-[--border] pt-6 text-[12px] text-[--text-faint]">
           <span>© {new Date().getFullYear()} Impact Makers</span>

@@ -13,7 +13,8 @@
     "refresh-images": "node src/jobs/refresh-images.js",
     "scrape-packs": "node src/jobs/scrape-packs.js",
     "demo-break": "node src/jobs/demo-break.js",
-    "import-heals": "node src/jobs/import-heals.js"
+    "import-heals": "node src/jobs/import-heals.js",
+    "test-alerts": "node src/jobs/test-alerts.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

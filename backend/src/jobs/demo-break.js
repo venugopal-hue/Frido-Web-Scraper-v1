@@ -46,5 +46,5 @@ if (result.healAwaitingApproval) {
   console.log('[demo] unexpected: the page returned products');
 }
 
-console.log('[demo] dashboard: http://localhost:3000');
+console.log('[demo] watch it on the dashboard');
 process.exit(0);

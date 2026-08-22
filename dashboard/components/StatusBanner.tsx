@@ -76,6 +76,15 @@ export default function StatusBanner({
         </div>
       </dl>
 
+      {/* A plain link, not fetch+blob: the browser handles the download and the
+          Content-Disposition filename the server already sets. */}
+      <a
+        href="/api/export.csv"
+        className="rounded-lg border border-[--border] px-3.5 py-2 text-[13px] text-[--text-muted] transition hover:border-neutral-400 hover:text-[--text]"
+      >
+        Export CSV
+      </a>
+
       <button
         onClick={onRefresh}
         disabled={busy}

@@ -21,6 +21,12 @@ const result = await runCycle({
   onEvent: (e) => console.log(`[scrape] ${e.type}`, e.count ?? ''),
 });
 
+if (result.skipped) {
+  console.error(`[scrape] ${result.reason} — not starting a second one.`);
+  console.error('[scrape] wait for it to finish, or stop the backend to release the lock.');
+  process.exit(0);
+}
+
 if (!result.ok) {
   console.error('[scrape] run failed');
   if (result.healAwaitingApproval) {

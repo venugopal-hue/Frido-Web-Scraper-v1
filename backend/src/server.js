@@ -7,6 +7,8 @@ import {
   recentRuns,
   latestRun,
   latestSuccessfulRun,
+  recentSuccessfulRuns,
+  activeRun,
   healEvents,
   activeHeal,
   allCategories,
@@ -19,11 +21,14 @@ import {
   reapStaleRuns,
   reapStaleHeals,
   packsByUrl,
+  productsForRun,
   addWatch,
   removeWatch,
   watchesForChat,
+  allWatchedUrls,
+  sparklineData,
 } from './db.js';
-import { runCycle } from './pipeline.js';
+import { runCycle, diffSnapshots } from './pipeline.js';
 import { healScraper, approveHeal, COLLECTOR_ID } from './brightdata.js';
 import { startScheduler } from './scheduler.js';
 import { getProgress, trackProgress, clearProgress } from './progress.js';
@@ -102,6 +107,67 @@ app.get('/api/data', (_req, res) => {
 
 app.get('/api/categories', (_req, res) => res.json({ categories: allCategories() }));
 
+/**
+ * The latest snapshot as CSV.
+ *
+ * Values are quoted and internal quotes doubled — product names contain commas
+ * and apostrophes, and an unescaped comma silently shifts every later column.
+ */
+app.get('/api/export.csv', (_req, res) => {
+  const { run, products } = latestProducts();
+  const packs = packsByUrl();
+
+  const columns = [
+    'product_name',
+    'category',
+    'current_price',
+    'original_price',
+    'discount_percent',
+    'availability',
+    'best_pack_label',
+    'best_pack_price_per_unit',
+    'product_url',
+    'image_url',
+    'scraped_at',
+  ];
+
+  const cell = (v) => {
+    if (v === null || v === undefined) return '';
+    const s = String(v);
+    return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+
+  const rows = products.map((p) => {
+    const options = p.product_url ? packs.get(p.product_url) : null;
+    const best = options?.length
+      ? options.reduce((a, b) => ((b.price_per_unit ?? Infinity) < (a.price_per_unit ?? Infinity) ? b : a))
+      : null;
+    const cheaper = best && p.current_price && best.price_per_unit < p.current_price ? best : null;
+
+    return [
+      p.product_name,
+      p.category,
+      p.current_price,
+      p.original_price,
+      p.discount_percent,
+      p.availability,
+      cheaper?.pack_label ?? '',
+      cheaper?.price_per_unit ?? '',
+      p.product_url,
+      p.image_url,
+      p.scraped_at,
+    ]
+      .map(cell)
+      .join(',');
+  });
+
+  const stamp = (run?.finished_at ?? new Date().toISOString()).slice(0, 10);
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="frido-prices-${stamp}.csv"`);
+  // BOM so Excel opens the rupee sign and product names as UTF-8.
+  res.send('﻿' + [columns.join(','), ...rows].join('\r\n'));
+});
+
 app.get('/api/runs', (req, res) =>
   res.json({ runs: recentRuns(Number(req.query.limit) || 20) })
 );
@@ -113,6 +179,34 @@ app.get('/api/history', (req, res) => {
 });
 
 app.get('/api/heals', (_req, res) => res.json({ events: healEvents() }));
+
+/**
+ * What changed between the last two successful runs.
+ *
+ * The pipeline already computes this on every run to decide what to send to
+ * Telegram, but the result was thrown away afterwards — the dashboard had no
+ * way to show it. Recomputing here keeps one definition of "changed".
+ */
+app.get('/api/changes', (_req, res) => {
+  const [current, previous] = recentSuccessfulRuns(2);
+  if (!current || !previous) {
+    return res.json({
+      diff: null,
+      reason: 'needs two completed runs to compare',
+      from: null,
+      to: current ?? null,
+    });
+  }
+
+  const diff = diffSnapshots(productsForRun(previous.id), productsForRun(current.id));
+  res.json({ diff, from: previous, to: current });
+});
+
+/** Every watched product across all chats — what the dashboard shows. */
+app.get('/api/watchlist', (_req, res) => res.json({ watches: allWatchedUrls() }));
+
+/** Bulk price series, so the grid does not make one request per card. */
+app.get('/api/sparklines', (_req, res) => res.json({ series: sparklineData() }));
 
 /** Single call the dashboard status bar and the bot's /status both read. */
 app.get('/api/status', (_req, res) => {
@@ -154,7 +248,15 @@ app.get('/api/status', (_req, res) => {
 /* ---------------- write endpoints ---------------- */
 
 app.post('/api/refresh', requireAdmin, async (req, res) => {
+  // Two layers: this process's own promise, and the shared DB lock that also
+  // catches the scheduler and the CLI.
   if (inFlight) return res.status(409).json({ error: 'a scrape is already running' });
+  const busy = activeRun();
+  if (busy) {
+    return res
+      .status(409)
+      .json({ error: `run #${busy.id} is already in progress`, run_id: busy.id });
+  }
 
   const urls = Array.isArray(req.body?.urls) && req.body.urls.length
     ? req.body.urls
@@ -247,12 +349,21 @@ app.get('/api/watches/:chatId', (req, res) =>
 );
 
 app.post('/api/watches', (req, res) => {
-  const { chat_id, product_url, product_name } = req.body ?? {};
+  const { chat_id, product_url, product_name, target_price } = req.body ?? {};
   if (!chat_id || !product_url) {
     return res.status(400).json({ error: 'chat_id and product_url are required' });
   }
-  addWatch(chat_id, product_url, product_name);
-  res.json({ watching: true, count: watchesForChat(chat_id).length });
+
+  const target =
+    target_price === null || target_price === undefined || target_price === ''
+      ? null
+      : Number(target_price);
+  if (target !== null && (!Number.isFinite(target) || target <= 0)) {
+    return res.status(400).json({ error: 'target_price must be a positive number' });
+  }
+
+  addWatch(chat_id, product_url, product_name, target);
+  res.json({ watching: true, target_price: target, count: watchesForChat(chat_id).length });
 });
 
 app.delete('/api/watches/:chatId', (req, res) => {

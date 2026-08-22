@@ -155,6 +155,48 @@ export default function PriceHistoryModal({
           )}
         </div>
 
+        {/* Pack options: the listed price is often not the cheapest per unit,
+            and this is the only place the breakdown is visible. */}
+        {product.packs && product.packs.length > 1 && (
+          <div className="mt-5">
+            <h4 className="text-[13px] font-semibold">Pack pricing</h4>
+            <ul className="mt-2 divide-y divide-[--border] rounded-lg border border-[--border]">
+              {[...product.packs]
+                .sort((a, b) => (a.unit_count ?? 0) - (b.unit_count ?? 0))
+                .map((o) => {
+                  const best =
+                    product.best_pack && o.pack_label === product.best_pack.label;
+                  return (
+                    <li
+                      key={o.pack_label}
+                      className={`flex items-center justify-between px-3 py-2 text-[13px] ${
+                        best ? 'bg-emerald-50' : ''
+                      }`}
+                    >
+                      <span>
+                        {o.pack_label}
+                        {best && (
+                          <span className="ml-2 text-[11px] font-medium text-emerald-700">
+                            best per unit
+                          </span>
+                        )}
+                      </span>
+                      <span className="tabular-nums">
+                        <span className="font-medium">{inr(o.price_per_unit)}</span>
+                        <span className="text-[--text-faint]">/unit</span>
+                        {o.total_price ? (
+                          <span className="ml-2 text-[--text-faint]">
+                            total {inr(o.total_price)}
+                          </span>
+                        ) : null}
+                      </span>
+                    </li>
+                  );
+                })}
+            </ul>
+          </div>
+        )}
+
         {flat && data.length >= 2 && (
           <p className="mt-3 text-[12px] text-[--text-faint]">
             Price has not moved across {data.length} recorded scrapes.

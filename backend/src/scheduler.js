@@ -31,6 +31,11 @@ export function startScheduler() {
         },
       });
 
+      if (result.skipped) {
+        console.log(`[scheduler] ${result.reason} — skipping this tick`);
+        return;
+      }
+
       if (result.healed) {
         await notifySubscribers(HEAL_ALERT);
       }

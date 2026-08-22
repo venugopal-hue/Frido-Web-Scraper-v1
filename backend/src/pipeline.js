@@ -16,6 +16,7 @@ import {
   updateHeal,
   setHealCoverageBefore,
   coverageOf,
+  activeRun,
 } from './db.js';
 import { runScraper, healScraper, normalizeProduct, COLLECTOR_ID } from './brightdata.js';
 import { enrichProducts } from './enrich.js';
@@ -38,20 +39,40 @@ const DEFAULT_HEAL_PROMPT =
  */
 async function runChunked({ collectorId, urls, onEvent = () => {} }) {
   const size = Number(process.env.SCRAPE_CHUNK_SIZE) || 4;
+  const concurrency = Math.max(1, Number(process.env.SCRAPE_CONCURRENCY) || 3);
+
   const chunks = [];
   for (let i = 0; i < urls.length; i += size) chunks.push(urls.slice(i, i + size));
 
   const rows = [];
   const errors = [];
   let anyOk = false;
+  let done = 0;
 
-  for (const [i, chunk] of chunks.entries()) {
-    const r = await runScraper({ collectorId, urls: chunk });
-    if (r.ok) anyOk = true;
-    else if (r.stderr) errors.push(r.stderr);
-    rows.push(...r.rows);
-    onEvent({ type: 'chunk_done', chunk: i + 1, of: chunks.length, rows: r.rows.length });
+  // Batches run several at a time rather than one after another. Each batch
+  // spends most of its time waiting on Bright Data to render pages, so running
+  // them sequentially left the connection idle and made a full pass take ~18
+  // minutes for work that overlaps almost perfectly.
+  const queue = chunks.map((chunk, i) => ({ chunk, i }));
+
+  async function worker() {
+    for (;;) {
+      const job = queue.shift();
+      if (!job) return;
+
+      const r = await runScraper({ collectorId, urls: job.chunk });
+      if (r.ok) anyOk = true;
+      else if (r.stderr) errors.push(r.stderr);
+      rows.push(...r.rows);
+
+      done++;
+      onEvent({ type: 'chunk_done', chunk: done, of: chunks.length, rows: r.rows.length });
+    }
   }
+
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, chunks.length) }, () => worker())
+  );
 
   return { ok: anyOk && rows.length > 0, rows, stderr: errors.join('\n').slice(0, 500) };
 }
@@ -122,10 +143,30 @@ export async function runCycle({
   urls,
   collectorId = COLLECTOR_ID,
   autoHeal = true,
+  /** Bypass the one-run-at-a-time lock. Only for deliberate manual override. */
+  force = false,
   enrich = process.env.ENRICH !== 'false',
   healPrompt = DEFAULT_HEAL_PROMPT,
   onEvent = () => {},
 } = {}) {
+  // One scrape at a time, whoever started it — the scheduler, the API or the
+  // CLI. Without this the hourly run and a manual one overlap, each paying
+  // Bright Data for the same pages.
+  if (!force) {
+    const busy = activeRun();
+    if (busy) {
+      onEvent({ type: 'skipped_locked', runId: busy.id, startedAt: busy.started_at });
+      return {
+        runId: busy.id,
+        ok: false,
+        skipped: true,
+        reason: `run #${busy.id} is already in progress`,
+        products: [],
+        diff: null,
+      };
+    }
+  }
+
   const previous = latestSuccessfulRun();
   const previousProducts = previous ? productsForRun(previous.id) : [];
 

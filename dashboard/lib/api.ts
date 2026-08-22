@@ -126,6 +126,39 @@ export type Status = {
   subscribers: number;
 };
 
+export type Watch = {
+  product_url: string;
+  product_name: string | null;
+  watchers: number;
+  since: string;
+  /** Alert only once the price reaches this. Null means any change. */
+  target_price: number | null;
+};
+
+export type PriceChange = {
+  product_name: string;
+  product_url: string;
+  from: number;
+  to: number;
+  direction: 'drop' | 'rise';
+};
+
+export type Diff = {
+  priceChanges: PriceChange[];
+  newItems: Product[];
+  backInStock: Product[];
+  wentOutOfStock: Product[];
+  removed: string[];
+  hasChanges: boolean;
+};
+
+export type Changes = {
+  diff: Diff | null;
+  reason?: string;
+  from: Run | null;
+  to: Run | null;
+};
+
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(path, { cache: 'no-store' });
   if (!res.ok) throw new Error(`${path} → ${res.status}`);
@@ -138,6 +171,16 @@ export const getData = () =>
 export const getStatus = () => get<Status>('/api/status');
 
 export const getHeals = () => get<{ events: HealEvent[] }>('/api/heals');
+
+export const getRuns = () => get<{ runs: Run[] }>('/api/runs');
+
+export const getWatchlist = () => get<{ watches: Watch[] }>('/api/watchlist');
+
+export const getChanges = () => get<Changes>('/api/changes');
+
+/** Bulk price series keyed by product_url — only products whose price moved. */
+export const getSparklines = () =>
+  get<{ series: Record<string, number[]> }>('/api/sparklines');
 
 export const getHistory = (url: string) =>
   get<{ product_url: string; points: { current_price: number; scraped_at: string }[] }>(
